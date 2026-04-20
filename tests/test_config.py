@@ -11,7 +11,8 @@ def test_config_loads_required_fields():
         "STREAMLIT_USERNAME": "admin",
         "STREAMLIT_PASSWORD": "pw",
     }
-    with patch.dict(os.environ, env, clear=True):
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
         from src.config import load_config
         cfg = load_config()
     assert cfg.database_url == "postgresql://test"
@@ -29,7 +30,8 @@ def test_config_defaults_optional_fields():
         "STREAMLIT_USERNAME": "admin",
         "STREAMLIT_PASSWORD": "pw",
     }
-    with patch.dict(os.environ, env, clear=True):
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
         from src.config import load_config
         cfg = load_config()
     assert cfg.infographics_dir == "./infographics"
@@ -38,7 +40,8 @@ def test_config_defaults_optional_fields():
 
 
 def test_config_raises_when_required_missing():
-    with patch.dict(os.environ, {}, clear=True):
+    with patch.dict(os.environ, {}, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
         from src.config import load_config
         with pytest.raises(RuntimeError, match="DATABASE_URL"):
             load_config()
