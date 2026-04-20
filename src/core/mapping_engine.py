@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 AMAZON_SLOTS = ("MAIN", "PT01", "PT02", "PT03", "PT04", "PT05", "PT06", "PT07", "PT08")
@@ -33,7 +33,6 @@ _DEFAULT_REGEX = r"_(\d{2})_(\w+)\.(png|jpg|jpeg)$"
 
 
 def infer_regex(sample_filenames: list[str]) -> str:
-    """Return the default regex. Future enhancement: analyze samples to tune it."""
     pattern = re.compile(_DEFAULT_REGEX, re.IGNORECASE)
     if not all(pattern.search(s) for s in sample_filenames):
         raise ValueError(
@@ -60,26 +59,25 @@ def assign_slots(
     assets: list[dict],
     rules: ProductLineRules,
 ) -> SlotAssignmentResult:
+    """Assign parsed assets to Amazon slots.
+
+    Collision policy: first asset (by input order) wins; later assets
+    mapping to an already-filled slot go to `unmapped`. Callers that want
+    deterministic collision resolution must pre-sort `assets`.
+    """
     result = SlotAssignmentResult()
     for raw in assets:
         parsed_core = parse_filename(raw["filename"], rules.regex)
-        parsed = (
-            ParsedAsset(
-                asset_id=raw["asset_id"],
-                filename=raw["filename"],
-                position_number=parsed_core.position_number if parsed_core else None,
-                position_label=parsed_core.position_label if parsed_core else None,
-                extension=parsed_core.extension if parsed_core else None,
-            )
-            if parsed_core
-            else ParsedAsset(
+        if parsed_core is not None:
+            parsed = replace(parsed_core, asset_id=raw["asset_id"])
+        else:
+            parsed = ParsedAsset(
                 asset_id=raw["asset_id"],
                 filename=raw["filename"],
                 position_number=None,
                 position_label=None,
                 extension=None,
             )
-        )
 
         if parsed.position_label is None:
             result.unmapped.append(parsed)
