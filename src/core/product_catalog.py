@@ -1,8 +1,12 @@
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -39,11 +43,13 @@ class ProductCatalog:
                     return SkuInfo(
                         sku=sku,
                         product_line=row.get("seo_cluster_1"),
-                        tier=row.get("tier_forecasting_us"),
+                        tier=row.get("tier"),
                         description=row.get("item_description"),
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "Supabase lookup failed for sku=%s, falling back to Excel: %s", sku, e
+                )
 
         df = self._load_excel()
         rows = df[df["SKU"] == sku]

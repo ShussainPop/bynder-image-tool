@@ -37,7 +37,7 @@ def test_supabase_takes_precedence_over_excel(mocker):
         {
             "sku": "PGR-001",
             "seo_cluster_1": "OverrideLine",
-            "tier_forecasting_us": "Z",
+            "tier": "Z",
             "item_description": "Overridden",
         }
     ]

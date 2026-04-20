@@ -1299,7 +1299,7 @@ def test_supabase_takes_precedence_over_excel(mocker):
         {
             "sku": "PGR-001",
             "seo_cluster_1": "OverrideLine",
-            "tier_forecasting_us": "Z",
+            "tier": "Z",
             "item_description": "Overridden",
         }
     ]
@@ -1368,7 +1368,7 @@ class ProductCatalog:
                     return SkuInfo(
                         sku=sku,
                         product_line=row.get("seo_cluster_1"),
-                        tier=row.get("tier_forecasting_us"),
+                        tier=row.get("tier"),
                         description=row.get("item_description"),
                     )
             except Exception:
