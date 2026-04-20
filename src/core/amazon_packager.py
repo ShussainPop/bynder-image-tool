@@ -7,7 +7,6 @@ from PIL import Image
 MAX_FILE_BYTES = 10 * 1024 * 1024
 MIN_DIMENSION = 1000
 ALLOWED_FORMATS = {"JPEG", "PNG"}
-EXT_MAP = {"JPEG": "jpg", "PNG": "png"}
 
 
 @dataclass
@@ -38,12 +37,17 @@ def validate_image(content: bytes, filename: str) -> ValidationResult:
         errors.append(f"Invalid image: {e}")
         return ValidationResult(ok=False, errors=errors, warnings=warnings)
 
-    img = Image.open(io.BytesIO(content))
-    fmt = img.format or ""
+    try:
+        img = Image.open(io.BytesIO(content))
+        fmt = img.format or ""
+        w, h = img.size
+    except Exception as e:
+        errors.append(f"Invalid image: {e}")
+        return ValidationResult(ok=False, errors=errors, warnings=warnings)
+
     if fmt not in ALLOWED_FORMATS:
         errors.append(f"Unsupported format '{fmt}'. Only JPEG and PNG are allowed.")
 
-    w, h = img.size
     if w < MIN_DIMENSION or h < MIN_DIMENSION:
         warnings.append(f"Image below recommended 1000x1000 ({w}x{h})")
 
