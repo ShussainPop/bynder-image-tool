@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from sqlalchemy.orm import Session
 
+from src.core.mapping_engine import AMAZON_SLOTS
 from src.db.models import Infographic, ProductLine
 
 
@@ -24,12 +25,15 @@ class InfographicLibrary:
         self._storage_dir.mkdir(parents=True, exist_ok=True)
 
     def save(self, inp: InfographicInput) -> Infographic:
+        if inp.amazon_slot not in AMAZON_SLOTS:
+            raise ValueError(f"invalid amazon_slot: {inp.amazon_slot!r}")
+
         line = self._session.get(ProductLine, inp.product_line_id)
         if line is None:
             raise ValueError(f"ProductLine {inp.product_line_id} not found")
 
         ext = Path(inp.filename).suffix.lstrip(".").lower() or "jpg"
-        slug = _slug(line.name)
+        slug = _slug(line.name) or f"pl-{inp.product_line_id}"
         subdir = self._storage_dir / slug / inp.tier
         subdir.mkdir(parents=True, exist_ok=True)
         unique_name = f"{uuid.uuid4().hex}.{ext}"
@@ -43,8 +47,13 @@ class InfographicLibrary:
             file_path=str(file_path),
             description=inp.description,
         )
-        self._session.add(row)
-        self._session.commit()
+        try:
+            self._session.add(row)
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            file_path.unlink(missing_ok=True)
+            raise
         self._session.refresh(row)
         return row
 
@@ -78,10 +87,9 @@ class InfographicLibrary:
         if row is None:
             return
         path = Path(row.file_path)
-        if path.exists():
-            path.unlink()
         self._session.delete(row)
         self._session.commit()
+        path.unlink(missing_ok=True)
 
 
 def _slug(name: str) -> str:
