@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.pytest_cache/
+.coverage
+htmlcov/
+infographics/
+*.zip
+.streamlit/secrets.toml
+*.sqlite
+.vscode/
+.idea/
