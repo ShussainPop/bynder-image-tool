@@ -1,22 +1,21 @@
+from functools import lru_cache
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from src.config import load_config
 
-_engine = None
-_Session = None
 
-
+@lru_cache(maxsize=1)
 def get_engine():
-    global _engine
-    if _engine is None:
-        cfg = load_config()
-        _engine = create_engine(cfg.database_url, future=True, pool_pre_ping=True)
-    return _engine
+    cfg = load_config()
+    return create_engine(cfg.database_url, future=True, pool_pre_ping=True)
+
+
+@lru_cache(maxsize=1)
+def _session_factory():
+    return sessionmaker(bind=get_engine(), future=True, expire_on_commit=False)
 
 
 def get_session():
-    global _Session
-    if _Session is None:
-        _Session = sessionmaker(bind=get_engine(), future=True, expire_on_commit=False)
-    return _Session()
+    return _session_factory()()
