@@ -1,0 +1,16 @@
+[
+  {
+    "id": "asset-001",
+    "name": "PCS_Derpy-and-Sussie_IP14_01_Front",
+    "original": "https://popsockets.bynder.com/m/asset-001/original/PCS_Derpy-and-Sussie_IP14_01_Front.png",
+    "property_sku": "PGR-001",
+    "extension": ["png"]
+  },
+  {
+    "id": "asset-002",
+    "name": "PCS_Derpy-and-Sussie_IP14_02_Back",
+    "original": "https://popsockets.bynder.com/m/asset-002/original/PCS_Derpy-and-Sussie_IP14_02_Back.png",
+    "property_sku": "PGR-001",
+    "extension": ["png"]
+  }
+]
