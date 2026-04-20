@@ -111,7 +111,7 @@ python-dotenv==1.0.1
 pandas==2.2.3
 openpyxl==3.1.5
 pillow==11.0.0
-bynder-sdk==1.4.0
+bynder-sdk==2.0.2
 supabase==2.10.0
 requests==2.32.3
 pytest==8.3.4
@@ -1435,6 +1435,8 @@ git commit -m "feat(core): add product catalog with Supabase primary + Excel fal
 ---
 
 ## Task 8: Bynder Client
+
+**Note:** The project uses `bynder-sdk==2.0.2` (v2.x). The implementer must verify v2 import paths and API surface in `bynder_sdk/asset_bank_client.py`. If the v2 SDK shape differs materially from what this task assumes (`bynder_sdk.BynderClient`, `asset_bank_client.media_list({...})`), adapt the wrapper to the actual v2 API and report the adaptation.
 
 **Files:**
 - Create: `src/core/bynder_client.py`
