@@ -27,7 +27,7 @@ def main() -> None:
     st.sidebar.title("Bynder Image Tool")
     tab = st.sidebar.radio(
         "Navigate",
-        ["Mapping Wizard", "Package SKU", "Library"],
+        ["Mapping Wizard", "Package SKU", "Library", "Bulk Export"],
         key="nav",
     )
 
@@ -37,9 +37,12 @@ def main() -> None:
     elif tab == "Package SKU":
         from src.ui.package_tab import render as render_package
         render_package()
-    else:
+    elif tab == "Library":
         from src.ui.library_tab import render as render_library
         render_library()
+    else:
+        from src.ui.bulk_export_tab import render as render_bulk
+        render_bulk()
 
 
 if __name__ == "__main__":
