@@ -45,3 +45,39 @@ def test_config_raises_when_required_missing():
         from src.config import load_config
         with pytest.raises(RuntimeError, match="DATABASE_URL"):
             load_config()
+
+
+def test_config_parses_optional_derivative_and_upc_keys():
+    env = {
+        "DATABASE_URL": "postgresql://test",
+        "BYNDER_DOMAIN": "popsockets.bynder.com",
+        "BYNDER_PERMANENT_TOKEN": "tok",
+        "STREAMLIT_USERNAME": "admin",
+        "STREAMLIT_PASSWORD": "pw",
+        "BYNDER_CSV_DERIVATIVE_KEY": "amazon_full",
+        "BYNDER_CSV_UPC_KEYS": "property_UPC,property_GTIN",
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
+        from src.config import load_config
+        cfg = load_config()
+    assert cfg.bynder_csv_derivative_key == "amazon_full"
+    assert cfg.bynder_csv_upc_keys == ["property_UPC", "property_GTIN"]
+
+
+def test_config_defaults_derivative_key_none_and_upc_keys_standard():
+    env = {
+        "DATABASE_URL": "postgresql://test",
+        "BYNDER_DOMAIN": "popsockets.bynder.com",
+        "BYNDER_PERMANENT_TOKEN": "tok",
+        "STREAMLIT_USERNAME": "admin",
+        "STREAMLIT_PASSWORD": "pw",
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
+        from src.config import load_config
+        cfg = load_config()
+    assert cfg.bynder_csv_derivative_key is None
+    assert cfg.bynder_csv_upc_keys == [
+        "property_UPC", "property_GTIN", "property_Barcode"
+    ]

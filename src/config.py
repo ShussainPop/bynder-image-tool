@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
 
@@ -17,6 +17,10 @@ class Config:
     supabase_service_key: str | None
     product_catalog_xlsx_path: str
     infographics_dir: str
+    bynder_csv_derivative_key: str | None = None
+    bynder_csv_upc_keys: list[str] = field(
+        default_factory=lambda: ["property_UPC", "property_GTIN", "property_Barcode"]
+    )
 
 
 _REQUIRED = (
@@ -34,6 +38,13 @@ def load_config() -> Config:
     if missing:
         raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
 
+    upc_keys_raw = os.environ.get("BYNDER_CSV_UPC_KEYS", "")
+    upc_keys = (
+        [k.strip() for k in upc_keys_raw.split(",") if k.strip()]
+        if upc_keys_raw
+        else ["property_UPC", "property_GTIN", "property_Barcode"]
+    )
+
     return Config(
         database_url=os.environ["DATABASE_URL"],
         bynder_domain=os.environ["BYNDER_DOMAIN"],
@@ -49,4 +60,6 @@ def load_config() -> Config:
             "PRODUCT_CATALOG_XLSX_PATH", "./data/barcelona.xlsx"
         ),
         infographics_dir=os.environ.get("INFOGRAPHICS_DIR", "./infographics"),
+        bynder_csv_derivative_key=os.environ.get("BYNDER_CSV_DERIVATIVE_KEY") or None,
+        bynder_csv_upc_keys=upc_keys,
     )
