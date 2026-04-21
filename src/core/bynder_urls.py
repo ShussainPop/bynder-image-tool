@@ -1,3 +1,6 @@
+"""URL resolution helpers for Bynder asset CDN links."""
+
+
 def resolve_csv_url(raw_asset: dict, derivative_key: str | None) -> str:
     """Return the best available public CDN URL for this Bynder asset.
 

@@ -2,6 +2,8 @@ import os
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
+_DEFAULT_UPC_KEYS = ["property_UPC", "property_GTIN", "property_Barcode"]
+
 
 @dataclass(frozen=True)
 class Config:
@@ -19,7 +21,7 @@ class Config:
     infographics_dir: str
     bynder_csv_derivative_key: str | None = None
     bynder_csv_upc_keys: list[str] = field(
-        default_factory=lambda: ["property_UPC", "property_GTIN", "property_Barcode"]
+        default_factory=lambda: list(_DEFAULT_UPC_KEYS)
     )
 
 
@@ -42,7 +44,7 @@ def load_config() -> Config:
     upc_keys = (
         [k.strip() for k in upc_keys_raw.split(",") if k.strip()]
         if upc_keys_raw
-        else ["property_UPC", "property_GTIN", "property_Barcode"]
+        else list(_DEFAULT_UPC_KEYS)
     )
 
     return Config(
