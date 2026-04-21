@@ -143,3 +143,18 @@ def run_export(
             on_progress(i, total)
 
     return BulkExportResult(rows=rows, missing_skus=missing, failed_skus=failed)
+
+
+CSV_COLUMNS = ["sku", "image_name", "image_link", "tags", "upc", "asset_id"]
+
+
+def to_csv_bytes(result: BulkExportResult) -> bytes:
+    """Serialize to UTF-8 with BOM, RFC4180 quoting."""
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(CSV_COLUMNS)
+    for r in result.rows:
+        writer.writerow([
+            r.sku, r.image_name, r.image_link, r.tags, r.upc, r.asset_id,
+        ])
+    return b"\xef\xbb\xbf" + buf.getvalue().encode("utf-8")
