@@ -9,6 +9,7 @@ import csv
 import io
 import re
 from dataclasses import dataclass
+from typing import Callable, Protocol
 
 from src.core.bynder_client import BynderAsset
 from src.core.bynder_urls import resolve_csv_url
@@ -92,3 +93,53 @@ def _first_non_empty(props: dict[str, str], keys: list[str]) -> str:
         if v:
             return v
     return ""
+
+
+class _SearchClient(Protocol):
+    def search_by_sku(self, sku: str) -> list[BynderAsset]: ...
+
+
+@dataclass
+class BulkExportResult:
+    rows: list[BulkExportRow]
+    missing_skus: list[str]
+    failed_skus: list[tuple[str, str]]
+
+
+def run_export(
+    skus: list[str],
+    client: _SearchClient,
+    derivative_key: str | None,
+    upc_keys: list[str],
+    include_missing: bool = False,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> BulkExportResult:
+    rows: list[BulkExportRow] = []
+    missing: list[str] = []
+    failed: list[tuple[str, str]] = []
+    total = len(skus)
+
+    for i, sku in enumerate(skus, start=1):
+        try:
+            assets = client.search_by_sku(sku)
+        except Exception as e:
+            failed.append((sku, str(e)))
+            if on_progress is not None:
+                on_progress(i, total)
+            continue
+
+        if not assets:
+            missing.append(sku)
+            if include_missing:
+                rows.append(BulkExportRow(
+                    sku=sku, image_name="", image_link="",
+                    tags="", upc="", asset_id="",
+                ))
+        else:
+            for a in assets:
+                rows.append(build_row(sku, a, derivative_key, upc_keys))
+
+        if on_progress is not None:
+            on_progress(i, total)
+
+    return BulkExportResult(rows=rows, missing_skus=missing, failed_skus=failed)
