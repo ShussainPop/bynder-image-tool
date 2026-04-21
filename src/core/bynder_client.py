@@ -1,4 +1,6 @@
 import logging
+import time
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -32,8 +34,20 @@ class BynderClient:
     SKU_PROPERTY_KEY = "property_SKUs"
     AMAZON_SAFE_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
 
-    def __init__(self, sdk: Any):
+    # Defaults: Bynder allows 4500/5min tenant-wide; stay 10% under.
+    DEFAULT_THROTTLE_LIMIT = 4000
+    DEFAULT_THROTTLE_WINDOW_SEC = 300.0
+
+    def __init__(
+        self,
+        sdk: Any,
+        throttle_limit: int = DEFAULT_THROTTLE_LIMIT,
+        throttle_window_sec: float = DEFAULT_THROTTLE_WINDOW_SEC,
+    ):
         self._sdk = sdk
+        self._throttle_limit = throttle_limit
+        self._throttle_window_sec = throttle_window_sec
+        self._call_times: deque[float] = deque()
 
     @classmethod
     def from_permanent_token(cls, domain: str, token: str) -> "BynderClient":
@@ -55,6 +69,21 @@ class BynderClient:
         sdk.fetch_token(code=None)
         return cls(sdk=sdk)
 
+    def _throttle(self) -> None:
+        now = time.monotonic()
+        window_start = now - self._throttle_window_sec
+        while self._call_times and self._call_times[0] < window_start:
+            self._call_times.popleft()
+        if len(self._call_times) >= self._throttle_limit:
+            sleep_for = self._throttle_window_sec - (now - self._call_times[0]) + 0.01
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+            now = time.monotonic()
+            window_start = now - self._throttle_window_sec
+            while self._call_times and self._call_times[0] < window_start:
+                self._call_times.popleft()
+        self._call_times.append(now)
+
     def search_by_sku(self, sku: str) -> list[BynderAsset]:
         """Find image assets for a SKU across both metaproperty and tags.
 
@@ -68,6 +97,7 @@ class BynderClient:
             {self.SKU_PROPERTY_KEY: sku, "type": "image"},
         ):
             logger.debug("Bynder media_list query: %s", query)
+            self._throttle()
             raw = self._sdk.asset_bank_client.media_list(query)
             logger.debug("  -> %d records", len(raw))
             for r in raw:

@@ -94,3 +94,35 @@ def test_stringify_property_handles_none_list_and_scalar():
     assert _stringify_property(["a", "b"]) == "a; b"
     assert _stringify_property("x") == "x"
     assert _stringify_property(42) == "42"
+
+
+import time as _time
+
+
+def test_throttle_blocks_when_window_full(mocker):
+    # Patch the clock so "now" advances deterministically.
+    clock = {"t": 1000.0}
+    def fake_monotonic():
+        return clock["t"]
+    sleeps: list[float] = []
+    def fake_sleep(s):
+        sleeps.append(s)
+        clock["t"] += s
+
+    mocker.patch("src.core.bynder_client.time.monotonic", side_effect=fake_monotonic)
+    mocker.patch("src.core.bynder_client.time.sleep", side_effect=fake_sleep)
+
+    fake_sdk = mocker.Mock()
+    fake_sdk.asset_bank_client.media_list.return_value = []
+    client = BynderClient(sdk=fake_sdk, throttle_limit=3, throttle_window_sec=5.0)
+
+    # Fill the window with 3 requests at t=1000
+    client.search_by_sku("A")   # 2 requests (tags + property_SKUs)
+    # third API call (total=3) is still at t=1000; the *next* one would exceed limit
+    assert sleeps == [], f"no sleep should fire until window overflows; got {sleeps}"
+
+    # Now trigger a 4th request. With throttle_limit=3 we must sleep until
+    # the oldest slot (at t=1000) ages out of the 5s window → sleep ~5s.
+    client.search_by_sku("B")
+    assert len(sleeps) >= 1
+    assert sleeps[0] > 0.0
