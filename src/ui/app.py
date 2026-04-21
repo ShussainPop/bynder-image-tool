@@ -1,3 +1,12 @@
+import sys
+from pathlib import Path
+
+# Streamlit invokes this file directly; ensure the project root is importable
+# so `from src....` resolves without requiring PYTHONPATH.
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 import streamlit as st
 
 from src.config import load_config
