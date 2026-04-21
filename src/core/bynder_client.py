@@ -26,6 +26,7 @@ class BynderClient:
     """
 
     SKU_PROPERTY_KEY = "property_SKUs"
+    AMAZON_SAFE_EXTENSIONS = frozenset({"jpg", "jpeg", "png"})
 
     def __init__(self, sdk: Any):
         self._sdk = sdk
@@ -51,11 +52,26 @@ class BynderClient:
         return cls(sdk=sdk)
 
     def search_by_sku(self, sku: str) -> list[BynderAsset]:
-        query = {self.SKU_PROPERTY_KEY: sku, "type": "image"}
-        logger.debug("Bynder media_list query: %s", query)
-        raw = self._sdk.asset_bank_client.media_list(query)
-        logger.debug("Bynder media_list returned %d raw records", len(raw))
-        return [_to_asset(r, self.SKU_PROPERTY_KEY) for r in raw if _matches_sku(r, sku, self.SKU_PROPERTY_KEY)]
+        """Find image assets for a SKU across both metaproperty and tags.
+
+        The popsockets tenant tags newer product photos with the SKU string
+        (e.g. tag '806781') while older/related assets may only carry the SKU
+        under `property_SKUs`. Query both and merge by asset id.
+        """
+        merged: dict[str, dict] = {}
+        for query in (
+            {"tags": sku, "type": "image"},
+            {self.SKU_PROPERTY_KEY: sku, "type": "image"},
+        ):
+            logger.debug("Bynder media_list query: %s", query)
+            raw = self._sdk.asset_bank_client.media_list(query)
+            logger.debug("  -> %d records", len(raw))
+            for r in raw:
+                if _matches_sku(r, sku, self.SKU_PROPERTY_KEY):
+                    merged[r.get("id", "")] = r
+
+        assets = [_to_asset(r, self.SKU_PROPERTY_KEY, sku) for r in merged.values()]
+        return [a for a in assets if a.extension in self.AMAZON_SAFE_EXTENSIONS]
 
     def download_asset(self, asset: BynderAsset, dest: Path) -> None:
         url = asset.original_url
@@ -80,10 +96,13 @@ def _matches_sku(raw: dict, sku: str, sku_key: str) -> bool:
         return True
     if isinstance(value, list) and sku in value:
         return True
+    tags = raw.get("tags") or []
+    if isinstance(tags, list) and sku in tags:
+        return True
     return False
 
 
-def _to_asset(raw: dict, sku_key: str) -> BynderAsset:
+def _to_asset(raw: dict, sku_key: str, searched_sku: str | None = None) -> BynderAsset:
     ext_list = raw.get("extension") or []
     ext = (ext_list[0] if ext_list else "").lower()
     name = raw.get("name") or ""
@@ -91,12 +110,10 @@ def _to_asset(raw: dict, sku_key: str) -> BynderAsset:
         filename = f"{name}.{ext}"
     else:
         filename = name
-    sku_raw = raw.get(sku_key)
-    sku_value = sku_raw[0] if isinstance(sku_raw, list) and sku_raw else sku_raw
     return BynderAsset(
         asset_id=raw.get("id", ""),
         filename=filename,
         original_url=raw.get("original", ""),
-        sku=sku_value if isinstance(sku_value, str) else None,
+        sku=searched_sku,
         extension=ext,
     )
