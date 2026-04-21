@@ -121,16 +121,38 @@ def _render_step1(session, pl: ProductLine, cfg, catalog: ProductCatalog) -> Non
         for r in session.query(FilenameRule).filter_by(product_line_id=pl.id).all()
     }
 
+    thumb_map = st.session_state.get(f"{pulled_key}__thumbs", {})
+    label_to_filename: dict[str, str] = {}
+    for s in samples:
+        parsed = parse_filename(s, regex)
+        if parsed and parsed.position_label not in label_to_filename:
+            label_to_filename[parsed.position_label] = s
+
     label_to_slot: dict[str, str] = {}
     st.markdown("#### Map each position label to an Amazon slot")
+    st.caption("Thumbnails shown when filenames came from 'Pull samples from Bynder'.")
     for label in labels:
         default = existing_rules.get(label, "MAIN")
-        label_to_slot[label] = st.selectbox(
-            f"{label}",
-            AMAZON_SLOTS,
-            index=AMAZON_SLOTS.index(default) if default in AMAZON_SLOTS else 0,
-            key=f"slot_{pl.id}_{label}",
-        )
+        thumb_col, label_col, slot_col = st.columns([1, 2, 2])
+        sample_filename = label_to_filename.get(label)
+        thumb_url = thumb_map.get(sample_filename) if sample_filename else None
+        with thumb_col:
+            if thumb_url:
+                st.image(thumb_url, width=96)
+            else:
+                st.empty()
+        with label_col:
+            st.markdown(f"**{label}**")
+            if sample_filename:
+                st.caption(sample_filename)
+        with slot_col:
+            label_to_slot[label] = st.selectbox(
+                "Slot",
+                AMAZON_SLOTS,
+                index=AMAZON_SLOTS.index(default) if default in AMAZON_SLOTS else 0,
+                key=f"slot_{pl.id}_{label}",
+                label_visibility="collapsed",
+            )
 
     if st.button("Save filename rules", key=f"save_rules_{pl.id}"):
         session.query(FilenamePattern).filter_by(product_line_id=pl.id).delete()
@@ -264,6 +286,7 @@ def _pull_samples_for_line(
 
     filenames: list[str] = []
     seen: set[str] = set()
+    thumb_map: dict[str, str] = {}
     with st.spinner(f"Querying Bynder for {len(skus)} SKUs..."):
         for sku in skus:
             try:
@@ -271,6 +294,8 @@ def _pull_samples_for_line(
                     if asset.filename not in seen:
                         seen.add(asset.filename)
                         filenames.append(asset.filename)
+                        if asset.thumbnail_url:
+                            thumb_map[asset.filename] = asset.thumbnail_url
             except Exception as e:
                 st.warning(f"SKU {sku}: {e}")
 
@@ -282,5 +307,6 @@ def _pull_samples_for_line(
         return
 
     st.session_state[pulled_key] = "\n".join(filenames[:15])
+    st.session_state[f"{pulled_key}__thumbs"] = thumb_map
     st.success(f"Pulled {len(filenames)} filenames from {len(skus)} SKUs.")
     st.rerun()

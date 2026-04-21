@@ -15,6 +15,7 @@ class BynderAsset:
     original_url: str  # may be empty; use download_asset() which resolves the signed URL
     sku: str | None
     extension: str
+    thumbnail_url: str = ""  # Bynder 'webimage' CDN URL for preview
 
 
 class BynderClient:
@@ -110,10 +111,13 @@ def _to_asset(raw: dict, sku_key: str, searched_sku: str | None = None) -> Bynde
         filename = f"{name}.{ext}"
     else:
         filename = name
+    thumbs = raw.get("thumbnails") or {}
+    thumb_url = thumbs.get("webimage") or thumbs.get("thul") or thumbs.get("mini") or ""
     return BynderAsset(
         asset_id=raw.get("id", ""),
         filename=filename,
         original_url=raw.get("original", ""),
         sku=searched_sku,
         extension=ext,
+        thumbnail_url=thumb_url,
     )
