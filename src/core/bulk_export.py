@@ -6,6 +6,7 @@ build one CSV row per asset -> serialize to CSV bytes.
 Streamlit UI lives in src/ui/bulk_export_tab.py and only orchestrates.
 """
 import csv
+import datetime as _dt
 import io
 import re
 from dataclasses import dataclass
@@ -158,3 +159,8 @@ def to_csv_bytes(result: BulkExportResult) -> bytes:
             r.sku, r.image_name, r.image_link, r.tags, r.upc, r.asset_id,
         ])
     return b"\xef\xbb\xbf" + buf.getvalue().encode("utf-8")
+
+
+def export_filename(now: _dt.datetime | None = None) -> str:
+    when = now or _dt.datetime.now()
+    return when.strftime("bynder_export_%Y-%m-%d_%H%M%S.csv")
