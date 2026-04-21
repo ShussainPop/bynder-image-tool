@@ -75,6 +75,11 @@ def render() -> None:
 
     _render_summary(result, len(skus))
 
+    if result.failed_skus and not result.rows and not (include_missing and result.missing_skus):
+        preview = "\n".join(f"- `{sku}`: {err}" for sku, err in result.failed_skus[:3])
+        st.error(f"Bynder returned errors for every SKU:\n\n{preview}")
+        return
+
     if not result.rows and not (include_missing and result.missing_skus):
         st.error("No rows to export. Check the SKU list or Bynder connection.")
         return
@@ -97,10 +102,13 @@ def _collect_skus(pasted: str, uploaded) -> list[str]:
 
 
 def _render_summary(result, total: int) -> None:
-    col1, col2, col3 = st.columns(3)
-    col1.metric("SKUs processed", total)
-    col2.metric("Rows", len(result.rows))
-    col3.metric("Missing", len(result.missing_skus))
+    num_cols = 4 if result.failed_skus else 3
+    cols = st.columns(num_cols)
+    cols[0].metric("SKUs processed", total)
+    cols[1].metric("Rows", len(result.rows))
+    cols[2].metric("Missing", len(result.missing_skus))
+    if result.failed_skus:
+        cols[3].metric("Errors", len(result.failed_skus))
 
     if result.missing_skus:
         with st.expander(f"{len(result.missing_skus)} SKUs with no Bynder matches"):
