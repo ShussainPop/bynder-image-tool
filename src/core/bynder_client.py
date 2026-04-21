@@ -17,7 +17,7 @@ class BynderAsset:
     extension: str
     thumbnail_url: str = ""  # Bynder 'webimage' CDN URL for preview
     tags: tuple[str, ...] = ()
-    metaproperties: dict[str, str] = field(default_factory=dict)
+    metaproperties: dict[str, str] = field(default_factory=dict, hash=False, compare=False)
     raw: dict = field(default_factory=dict, hash=False, compare=False)
 
 

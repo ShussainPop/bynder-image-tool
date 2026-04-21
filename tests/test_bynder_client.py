@@ -71,4 +71,26 @@ def test_to_asset_captures_tags_and_metaproperties(mocker):
     assert a.tags == ("SKU-010", "swappable", "case")
     assert a.metaproperties["property_UPC"] == "842978104324"
     assert a.metaproperties["property_Color"] == "Black; Carbon"
-    assert "property_SKUs" in a.metaproperties
+    assert a.metaproperties["property_SKUs"] == "SKU-010"
+
+
+def test_bynder_asset_is_hashable_even_with_metaproperties():
+    asset = BynderAsset(
+        asset_id="a",
+        filename="f.jpg",
+        original_url="",
+        sku="S",
+        extension="jpg",
+        metaproperties={"property_UPC": "123"},
+    )
+    # Must not raise TypeError: unhashable type: 'dict'
+    hash(asset)
+    assert asset in {asset}
+
+
+def test_stringify_property_handles_none_list_and_scalar():
+    from src.core.bynder_client import _stringify_property
+    assert _stringify_property(None) == ""
+    assert _stringify_property(["a", "b"]) == "a; b"
+    assert _stringify_property("x") == "x"
+    assert _stringify_property(42) == "42"
