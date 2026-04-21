@@ -6,7 +6,7 @@ from src.core.product_catalog import ProductCatalog
 from src.core.infographic_library import InfographicLibrary, InfographicInput
 from src.db.models import ProductLine, FilenamePattern, FilenameRule, Infographic
 from src.config import load_config
-from src.ui.deps import build_supabase_client, session_scope
+from src.ui.deps import build_supabase_client, make_bynder_client, session_scope
 
 
 def render() -> None:
@@ -55,14 +55,14 @@ def render() -> None:
                 key=f"step_{pl.id}",
             )
             if step.startswith("1"):
-                _render_step1(session, pl)
+                _render_step1(session, pl, cfg, catalog)
             elif step.startswith("2"):
                 _render_step2(session, pl, lib, catalog)
             else:
                 _render_step3(session, pl)
 
 
-def _render_step1(session, pl: ProductLine) -> None:
+def _render_step1(session, pl: ProductLine, cfg, catalog: ProductCatalog) -> None:
     st.markdown("### Step 1: Filename rules")
 
     existing_pattern = (
@@ -71,7 +71,15 @@ def _render_step1(session, pl: ProductLine) -> None:
         .order_by(FilenamePattern.id.desc())
         .first()
     )
-    default_samples = existing_pattern.sample_filename if existing_pattern else ""
+    pulled_key = f"pulled_samples_{pl.id}"
+
+    if st.button("🔍 Pull samples from Bynder", key=f"pull_{pl.id}"):
+        _pull_samples_for_line(pl, cfg, catalog, pulled_key)
+
+    default_samples = (
+        st.session_state.get(pulled_key)
+        or (existing_pattern.sample_filename if existing_pattern else "")
+    )
 
     samples_raw = st.text_area(
         "Paste 3-5 example Bynder filenames (one per line)",
@@ -234,3 +242,45 @@ def _render_step3(session, pl: ProductLine) -> None:
             for t in tiers
         ]
     )
+
+
+def _pull_samples_for_line(
+    pl: ProductLine, cfg, catalog: ProductCatalog, pulled_key: str
+) -> None:
+    try:
+        skus = catalog.list_skus_for_product_line(pl.name, limit=5)
+    except FileNotFoundError:
+        st.error("Product catalog Excel not found; cannot auto-pull samples.")
+        return
+    if not skus:
+        st.warning(f"No SKUs found in Barcelona for '{pl.name}'.")
+        return
+
+    try:
+        bynder = make_bynder_client(cfg)
+    except Exception as e:
+        st.error(f"Bynder auth failed: {e}")
+        return
+
+    filenames: list[str] = []
+    seen: set[str] = set()
+    with st.spinner(f"Querying Bynder for {len(skus)} SKUs..."):
+        for sku in skus:
+            try:
+                for asset in bynder.search_by_sku(sku):
+                    if asset.filename not in seen:
+                        seen.add(asset.filename)
+                        filenames.append(asset.filename)
+            except Exception as e:
+                st.warning(f"SKU {sku}: {e}")
+
+    if not filenames:
+        st.warning(
+            f"No Bynder image assets matched any of the {len(skus)} sampled SKUs. "
+            "Try another product line or paste filenames manually."
+        )
+        return
+
+    st.session_state[pulled_key] = "\n".join(filenames[:15])
+    st.success(f"Pulled {len(filenames)} filenames from {len(skus)} SKUs.")
+    st.rerun()

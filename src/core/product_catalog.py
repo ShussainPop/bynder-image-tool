@@ -73,6 +73,16 @@ class ProductCatalog:
         vals = df["Tier for Forecasting - US"].dropna().unique().tolist()
         return sorted(str(v) for v in vals)
 
+    def list_skus_for_product_line(
+        self, name: str, limit: int | None = None
+    ) -> list[str]:
+        df = self._load_excel()
+        mask = df["SEO Cluster 1"].astype(str) == name
+        skus = df.loc[mask, "SKU"].dropna().astype(str).tolist()
+        if limit is not None:
+            skus = skus[:limit]
+        return skus
+
     def _load_excel(self) -> pd.DataFrame:
         return _cached_excel(self._xlsx_path)
 

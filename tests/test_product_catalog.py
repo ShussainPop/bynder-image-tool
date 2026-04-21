@@ -47,6 +47,14 @@ def test_supabase_takes_precedence_over_excel(mocker):
     assert info.tier == "Z"
 
 
+def test_list_skus_for_product_line():
+    cat = ProductCatalog(xlsx_path=str(FIXTURE), supabase_client=None)
+    assert set(cat.list_skus_for_product_line("PopGrip Standard")) == {"PGR-001", "PGR-002"}
+    assert cat.list_skus_for_product_line("Wallet") == ["WLT-001"]
+    assert cat.list_skus_for_product_line("Unknown") == []
+    assert cat.list_skus_for_product_line("PopGrip Standard", limit=1) == ["PGR-001"]
+
+
 def test_supabase_falls_back_to_excel_on_miss(mocker):
     supabase_stub = mocker.Mock()
     supabase_stub.table.return_value.select.return_value.eq.return_value.execute.return_value.data = []
