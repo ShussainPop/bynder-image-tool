@@ -8,6 +8,10 @@ Streamlit UI lives in src/ui/bulk_export_tab.py and only orchestrates.
 import csv
 import io
 import re
+from dataclasses import dataclass
+
+from src.core.bynder_client import BynderAsset
+from src.core.bynder_urls import resolve_csv_url
 
 
 MAX_SKUS_PER_RUN = 2000
@@ -52,3 +56,39 @@ def _dedupe_case_insensitive_over_cap(skus: list[str]) -> list[str]:
             "Split into smaller batches."
         )
     return result
+
+
+@dataclass
+class BulkExportRow:
+    sku: str
+    image_name: str
+    image_link: str
+    tags: str
+    upc: str
+    asset_id: str
+
+
+def build_row(
+    sku: str,
+    asset: BynderAsset,
+    derivative_key: str | None,
+    upc_keys: list[str],
+) -> BulkExportRow:
+    image_link = resolve_csv_url(asset.raw, derivative_key)
+    upc = _first_non_empty(asset.metaproperties, upc_keys)
+    return BulkExportRow(
+        sku=sku,
+        image_name=asset.filename,
+        image_link=image_link,
+        tags="; ".join(asset.tags),
+        upc=upc,
+        asset_id=asset.asset_id,
+    )
+
+
+def _first_non_empty(props: dict[str, str], keys: list[str]) -> str:
+    for k in keys:
+        v = props.get(k, "")
+        if v:
+            return v
+    return ""
