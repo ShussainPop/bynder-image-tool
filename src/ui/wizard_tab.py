@@ -5,58 +5,61 @@ from src.core.mapping_engine import AMAZON_SLOTS, infer_regex, parse_filename
 from src.core.product_catalog import ProductCatalog
 from src.core.infographic_library import InfographicLibrary, InfographicInput
 from src.db.models import ProductLine, FilenamePattern, FilenameRule, Infographic
-from src.db.session import get_session
 from src.config import load_config
+from src.ui.deps import build_supabase_client, session_scope
 
 
 def render() -> None:
     st.header("Mapping Wizard")
     cfg = load_config()
-    session = get_session()
-    catalog = ProductCatalog(xlsx_path=cfg.product_catalog_xlsx_path, supabase_client=None)
-    lib = InfographicLibrary(session=session, storage_dir=Path(cfg.infographics_dir))
-
-    col_left, col_right = st.columns([1, 3])
-
-    with col_left:
-        st.subheader("Product lines")
-        existing_names = [pl.name for pl in session.query(ProductLine).order_by(ProductLine.name).all()]
-        try:
-            catalog_lines = catalog.list_product_lines()
-        except FileNotFoundError:
-            catalog_lines = []
-        all_lines = sorted(set(existing_names) | set(catalog_lines))
-        options = ["+ New product line"] + all_lines
-        choice = st.radio("Select a line", options, key="wiz_line_choice")
-
-        if choice == "+ New product line":
-            new_name = st.text_input("New product line name")
-            if st.button("Create") and new_name.strip():
-                session.add(ProductLine(name=new_name.strip()))
-                session.commit()
-                st.rerun()
-            return
-
-        pl = session.query(ProductLine).filter_by(name=choice).first()
-        if pl is None:
-            pl = ProductLine(name=choice)
-            session.add(pl)
-            session.commit()
-
-    with col_right:
-        st.subheader(f"Configure: {pl.name}")
-        step = st.radio(
-            "Step",
-            ["1. Filename rules", "2. Infographics", "3. Review"],
-            horizontal=True,
-            key=f"step_{pl.id}",
+    with session_scope() as session:
+        catalog = ProductCatalog(
+            xlsx_path=cfg.product_catalog_xlsx_path,
+            supabase_client=build_supabase_client(cfg),
         )
-        if step.startswith("1"):
-            _render_step1(session, pl)
-        elif step.startswith("2"):
-            _render_step2(session, pl, lib, catalog)
-        else:
-            _render_step3(session, pl)
+        lib = InfographicLibrary(session=session, storage_dir=Path(cfg.infographics_dir))
+
+        col_left, col_right = st.columns([1, 3])
+
+        with col_left:
+            st.subheader("Product lines")
+            existing_names = [pl.name for pl in session.query(ProductLine).order_by(ProductLine.name).all()]
+            try:
+                catalog_lines = catalog.list_product_lines()
+            except FileNotFoundError:
+                catalog_lines = []
+            all_lines = sorted(set(existing_names) | set(catalog_lines))
+            options = ["+ New product line"] + all_lines
+            choice = st.radio("Select a line", options, key="wiz_line_choice")
+
+            if choice == "+ New product line":
+                new_name = st.text_input("New product line name")
+                if st.button("Create") and new_name.strip():
+                    session.add(ProductLine(name=new_name.strip()))
+                    session.commit()
+                    st.rerun()
+                return
+
+            pl = session.query(ProductLine).filter_by(name=choice).first()
+            if pl is None:
+                pl = ProductLine(name=choice)
+                session.add(pl)
+                session.commit()
+
+        with col_right:
+            st.subheader(f"Configure: {pl.name}")
+            step = st.radio(
+                "Step",
+                ["1. Filename rules", "2. Infographics", "3. Review"],
+                horizontal=True,
+                key=f"step_{pl.id}",
+            )
+            if step.startswith("1"):
+                _render_step1(session, pl)
+            elif step.startswith("2"):
+                _render_step2(session, pl, lib, catalog)
+            else:
+                _render_step3(session, pl)
 
 
 def _render_step1(session, pl: ProductLine) -> None:
