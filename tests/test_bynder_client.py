@@ -48,3 +48,27 @@ def test_download_asset_streams_to_path(mocker, tmp_path):
     dest = tmp_path / "x.png"
     client.download_asset(asset, dest)
     assert dest.read_bytes() == b"\x89PNG\x00\x00"
+
+
+def test_to_asset_captures_tags_and_metaproperties(mocker):
+    raw = {
+        "id": "asset-010",
+        "name": "PCS_TEST_01_Front",
+        "type": "image",
+        "extension": ["jpg"],
+        "property_SKUs": ["SKU-010"],
+        "property_UPC": "842978104324",
+        "property_Color": ["Black", "Carbon"],
+        "tags": ["SKU-010", "swappable", "case"],
+    }
+    fake_sdk = mocker.Mock()
+    fake_sdk.asset_bank_client.media_list.return_value = [raw]
+    client = BynderClient(sdk=fake_sdk)
+
+    assets = client.search_by_sku("SKU-010")
+    assert len(assets) == 1
+    a = assets[0]
+    assert a.tags == ("SKU-010", "swappable", "case")
+    assert a.metaproperties["property_UPC"] == "842978104324"
+    assert a.metaproperties["property_Color"] == "Black; Carbon"
+    assert "property_SKUs" in a.metaproperties

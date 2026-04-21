@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 import requests
@@ -16,6 +16,9 @@ class BynderAsset:
     sku: str | None
     extension: str
     thumbnail_url: str = ""  # Bynder 'webimage' CDN URL for preview
+    tags: tuple[str, ...] = ()
+    metaproperties: dict[str, str] = field(default_factory=dict)
+    raw: dict = field(default_factory=dict, hash=False, compare=False)
 
 
 class BynderClient:
@@ -113,6 +116,13 @@ def _to_asset(raw: dict, sku_key: str, searched_sku: str | None = None) -> Bynde
         filename = name
     thumbs = raw.get("thumbnails") or {}
     thumb_url = thumbs.get("webimage") or thumbs.get("thul") or thumbs.get("mini") or ""
+    raw_tags = raw.get("tags") or []
+    tags = tuple(str(t) for t in raw_tags) if isinstance(raw_tags, list) else ()
+    metaproperties = {
+        k: _stringify_property(v)
+        for k, v in raw.items()
+        if k.startswith("property_")
+    }
     return BynderAsset(
         asset_id=raw.get("id", ""),
         filename=filename,
@@ -120,4 +130,15 @@ def _to_asset(raw: dict, sku_key: str, searched_sku: str | None = None) -> Bynde
         sku=searched_sku,
         extension=ext,
         thumbnail_url=thumb_url,
+        tags=tags,
+        metaproperties=metaproperties,
+        raw=raw,
     )
+
+
+def _stringify_property(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(v) for v in value)
+    if value is None:
+        return ""
+    return str(value)
