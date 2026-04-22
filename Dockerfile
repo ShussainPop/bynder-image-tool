@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY alembic.ini .
 
-RUN mkdir -p /app/infographics /app/data
+RUN mkdir -p /app/infographics /app/data /app/db
 
 EXPOSE 8501
 

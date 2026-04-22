@@ -26,13 +26,13 @@ def upgrade() -> None:
     sa.Column('packaged_by', sa.Text(), nullable=True),
     sa.Column('slot_manifest', sa.JSON(), nullable=True),
     sa.Column('zip_filename', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('contentup_image_product_lines',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.Text(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -43,7 +43,7 @@ def upgrade() -> None:
     sa.Column('source', sa.String(length=16), nullable=False),
     sa.Column('bynder_asset_id', sa.Text(), nullable=True),
     sa.Column('uploaded_file_path', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
     sa.CheckConstraint("source IN ('bynder', 'upload')", name='source_check'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('sku', 'amazon_slot')
@@ -53,7 +53,7 @@ def upgrade() -> None:
     sa.Column('product_line_id', sa.Integer(), nullable=False),
     sa.Column('regex', sa.Text(), nullable=False),
     sa.Column('sample_filename', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
     sa.ForeignKeyConstraint(['product_line_id'], ['contentup_image_product_lines.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -73,7 +73,7 @@ def upgrade() -> None:
     sa.Column('amazon_slot', sa.String(length=8), nullable=False),
     sa.Column('file_path', sa.Text(), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
     sa.ForeignKeyConstraint(['product_line_id'], ['contentup_image_product_lines.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
