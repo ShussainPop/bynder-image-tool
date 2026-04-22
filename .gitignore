@@ -1,14 +1,31 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
 venv/
-.env
 .pytest_cache/
 .coverage
 htmlcov/
-infographics/
-*.zip
+
+# Secrets & local config
+.env
 .streamlit/secrets.toml
-*.sqlite
+
+# Editor/IDE
 .vscode/
 .idea/
+
+# Local DB + build artifacts
+*.sqlite
+*.zip
+*.log
+
+# User-managed asset storage
+infographics/
+overrides/
+
+# Proprietary PopSockets product data — never commit
+# (Catalog Excel contains costs, MSRPs, vendor codes.)
+data/
+*.xlsx
+!tests/fixtures/*.xlsx

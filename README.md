@@ -24,6 +24,16 @@ Open http://localhost:8501
 
     streamlit run src/ui/app.py
 
+If `streamlit run` reports `ModuleNotFoundError: No module named 'bynder_sdk'`,
+the `streamlit` on your PATH is resolving to system Python instead of the venv.
+Either re-activate the venv, or call the venv's binary directly:
+`.venv/Scripts/streamlit.exe run src/ui/app.py` (Windows).
+
+The product catalog (`data/barcelona.xlsx`) is gitignored — it contains
+proprietary cost data. The tool resolves SKUs from Supabase first and falls
+back to the Excel file, so running against Supabase avoids the dependency.
+Ask a teammate for the file if you need local Excel-only development.
+
 ## Tests
 
     pytest tests/ -v --cov=src
@@ -64,6 +74,16 @@ Open http://localhost:8501
 - Optional: `BYNDER_CSV_DERIVATIVE_KEY`, `BYNDER_CSV_UPC_KEYS` (for Bulk Export — see Workflow §4)
 - Mount persistent volume at `/app/infographics`
 - Expose port 8501 behind Coolify's reverse proxy
+
+## Design docs and plans
+
+Full design specs and task-level implementation plans live under
+`docs/superpowers/`:
+
+- `specs/2026-04-20-bynder-image-tool-design.md` — original tool design
+- `specs/2026-04-21-bulk-sku-csv-export-design.md` — Bulk Export feature design (includes Bynder admin guide for configuring full-resolution derivatives in appendix §16)
+- `plans/2026-04-20-bynder-image-tool.md` — original build plan
+- `plans/2026-04-21-bulk-sku-csv-export.md` — Bulk Export build plan
 
 ## Phase 2 migration to popsockets-content-manager
 
