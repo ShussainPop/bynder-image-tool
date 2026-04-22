@@ -51,7 +51,7 @@ Open http://localhost:8501
 
 4. **Bulk Export** (ad-hoc)
    - Paste SKUs or upload a CSV (first column = SKU)
-   - Tool queries Bynder for each (tags + `property_SKUs`), dedupes, rate-limits
+   - Tool queries Bynder's keyword index for each SKU and filters client-side to assets that mention the SKU in `property_SKUs`, tags, description, or filename. Covers the PopSockets tenant's inconsistent legacy tagging; dedupes by asset id; rate-limited to stay under Bynder's tenant cap
    - Downloads a CSV: one row per matched asset with `sku, image_name, image_link, tags, upc, asset_id`
    - Use the CSV to drive Amazon uploads, spreadsheets, or hand off to a VA
    - Optional env vars (see `.env.example`): `BYNDER_CSV_DERIVATIVE_KEY` for full-resolution CDN URLs, `BYNDER_CSV_UPC_KEYS` to override UPC metaproperty lookup

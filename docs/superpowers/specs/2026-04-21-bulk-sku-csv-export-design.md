@@ -366,3 +366,27 @@ If you prefer serving the uploaded source file byte-for-byte (lossless, but you 
 ## 17. Open Questions
 
 None at spec time. UPC key names, derivative key name, and rate-limit headroom are all env-var-configurable, so changes post-implementation don't require code edits.
+
+## 18. Post-Implementation Amendment (2026-04-22) — broadened SKU search
+
+**Context:** Live testing against the real Bynder tenant revealed that only a minority of existing assets use the canonical `property_SKUs` metaproperty. Historical assets store the SKU in varied places depending on when they were uploaded.
+
+**Observed storage conventions across 12 production SKUs:**
+
+| Location | Example | Notes |
+|---|---|---|
+| `property_SKUs` list | `property_SKUs=["805319"]` | Canonical; used for recent uploads |
+| Tag as exact string | `tags=["806781"]` | Assumed by original spec §6 — in practice, **zero** of 12 SKUs tested matched this way |
+| Tag containing SKU as substring | `tags=["702288 MS CIR-Adapter Ring White-1PK"]` | Common legacy pattern |
+| `description` field | `description="802486 842978167466802509 842978167695"` | SKU + UPC(s) concatenated |
+| Filename only | `name="805149_Photo_05_1x1.jpg"` | Oldest legacy pattern |
+
+**Change to §6 / §11.1:** `BynderClient.search_by_sku` now fires a single `{"keyword": sku, "type": "image"}` query to Bynder's fuzzy full-text index (replacing the former dual-query of `tags:sku` + `property_SKUs:sku`) and filters client-side in `_matches_sku` against all five observed locations. Behaviorally:
+
+- Assets using `property_SKUs` still match (unchanged for new uploads).
+- Legacy assets with SKU in tag substring / description / filename now match too.
+- Single API call per SKU instead of two, so the 2,000-SKU cap in §9 has more rate-limit headroom than originally calculated.
+
+**Risk accepted:** Substring matching on tags/description/name could theoretically produce false positives for short or alphanumeric SKUs. PopSockets SKUs are 6-digit numerics where collision is negligible. If the product taxonomy ever adopts shorter or ambiguous SKU strings, the filter should be tightened to word-boundary regex.
+
+**No CSV schema change.** Column set, env vars, UI flow, and rate limits from §4–§16 unchanged.
