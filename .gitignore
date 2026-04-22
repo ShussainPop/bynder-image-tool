@@ -9,6 +9,8 @@ htmlcov/
 
 # Secrets & local config
 .env
+.env.*
+!.env.example
 .streamlit/secrets.toml
 
 # Editor/IDE
