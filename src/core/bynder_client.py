@@ -85,24 +85,24 @@ class BynderClient:
         self._call_times.append(now)
 
     def search_by_sku(self, sku: str) -> list[BynderAsset]:
-        """Find image assets for a SKU across both metaproperty and tags.
+        """Find image assets for a SKU across all tenant tagging conventions.
 
-        The popsockets tenant tags newer product photos with the SKU string
-        (e.g. tag '806781') while older/related assets may only carry the SKU
-        under `property_SKUs`. Query both and merge by asset id.
+        The PopSockets tenant stores SKUs in varied places across the historical
+        catalog: the `SKUs` metaproperty (canonical), embedded in tag strings,
+        inside the description field, or only in the filename. A single keyword
+        query hits Bynder's fuzzy full-text index; we filter client-side so only
+        assets that actually mention the SKU are returned.
         """
+        query = {"keyword": sku, "type": "image"}
+        logger.debug("Bynder media_list query: %s", query)
+        self._throttle()
+        raw = self._sdk.asset_bank_client.media_list(query)
+        logger.debug("  -> %d records", len(raw))
+
         merged: dict[str, dict] = {}
-        for query in (
-            {"tags": sku, "type": "image"},
-            {self.SKU_PROPERTY_KEY: sku, "type": "image"},
-        ):
-            logger.debug("Bynder media_list query: %s", query)
-            self._throttle()
-            raw = self._sdk.asset_bank_client.media_list(query)
-            logger.debug("  -> %d records", len(raw))
-            for r in raw:
-                if _matches_sku(r, sku, self.SKU_PROPERTY_KEY):
-                    merged[r.get("id", "")] = r
+        for r in raw:
+            if _matches_sku(r, sku, self.SKU_PROPERTY_KEY):
+                merged[r.get("id", "")] = r
 
         assets = [_to_asset(r, self.SKU_PROPERTY_KEY, sku) for r in merged.values()]
         return [a for a in assets if a.extension in self.AMAZON_SAFE_EXTENSIONS]
@@ -125,13 +125,30 @@ class BynderClient:
 
 
 def _matches_sku(raw: dict, sku: str, sku_key: str) -> bool:
+    """True when the raw Bynder asset mentions the SKU in any indexed location.
+
+    Covers the four storage conventions observed on the PopSockets tenant:
+      - property_SKUs (canonical — list membership)
+      - tag equal to SKU, or tag containing SKU as a substring
+      - description field (e.g. '<SKU> <UPC> <SKU2> <UPC2>')
+      - filename anywhere
+    For 6-digit numeric PopSockets SKUs the substring collision risk is negligible.
+    """
     value = raw.get(sku_key)
     if value == sku:
         return True
     if isinstance(value, list) and sku in value:
         return True
     tags = raw.get("tags") or []
-    if isinstance(tags, list) and sku in tags:
+    if isinstance(tags, list):
+        for t in tags:
+            if sku in str(t):
+                return True
+    description = raw.get("description") or ""
+    if sku in description:
+        return True
+    name = raw.get("name") or ""
+    if sku in name:
         return True
     return False
 

@@ -96,6 +96,57 @@ def test_stringify_property_handles_none_list_and_scalar():
     assert _stringify_property(42) == "42"
 
 
+def test_search_by_sku_matches_all_tenant_tagging_conventions(mocker):
+    """PopSockets tenant stores SKUs in varied places across historical catalog."""
+    sku = "806777"
+    raw_canonical = {
+        "id": "a1",
+        "name": "canonical.jpg",
+        "extension": ["jpg"],
+        "property_SKUs": [sku],
+    }
+    raw_tag_substring = {
+        "id": "a2",
+        "name": "item.jpg",
+        "extension": ["jpg"],
+        "tags": [f"{sku} MS CIR-Adapter Ring White-1PK"],
+    }
+    raw_description = {
+        "id": "a3",
+        "name": "generic.jpg",
+        "extension": ["jpg"],
+        "description": f"{sku} 842978104324 806778 842978104331",
+    }
+    raw_filename = {
+        "id": "a4",
+        "name": f"{sku}_Photo_01_1x1.jpg",
+        "extension": ["jpg"],
+    }
+    raw_unrelated = {
+        "id": "a5",
+        "name": "unrelated.jpg",
+        "extension": ["jpg"],
+        "tags": ["MKTGRevisit"],
+        "description": "nothing to see here",
+    }
+
+    fake_sdk = mocker.Mock()
+    fake_sdk.asset_bank_client.media_list.return_value = [
+        raw_canonical, raw_tag_substring, raw_description, raw_filename, raw_unrelated,
+    ]
+    client = BynderClient(sdk=fake_sdk)
+
+    assets = client.search_by_sku(sku)
+    ids = {a.asset_id for a in assets}
+    assert ids == {"a1", "a2", "a3", "a4"}, f"expected all 4 legacy patterns to match, got {ids}"
+
+    # Must be a single keyword query (not tags + property_SKUs)
+    called_queries = [c.args[0] for c in fake_sdk.asset_bank_client.media_list.call_args_list]
+    assert len(called_queries) == 1, f"expected 1 query, got {len(called_queries)}"
+    assert "keyword" in called_queries[0]
+    assert called_queries[0]["keyword"] == sku
+
+
 def test_throttle_blocks_when_window_full(mocker):
     # Patch the clock so "now" advances deterministically.
     clock = {"t": 1000.0}
@@ -111,17 +162,15 @@ def test_throttle_blocks_when_window_full(mocker):
 
     fake_sdk = mocker.Mock()
     fake_sdk.asset_bank_client.media_list.return_value = []
-    client = BynderClient(sdk=fake_sdk, throttle_limit=3, throttle_window_sec=5.0)
+    client = BynderClient(sdk=fake_sdk, throttle_limit=1, throttle_window_sec=5.0)
 
-    # search_by_sku("A") makes 2 _throttle() calls (one per media_list query:
-    # tags query + property_SKUs query). deque now has 2 entries; window not yet full.
-    client.search_by_sku("A")   # 2 requests (tags + property_SKUs)
-    # With throttle_limit=3 and only 2 slots used, no sleep should occur yet.
+    # search_by_sku fires 1 _throttle() call (single keyword query).
+    # With throttle_limit=1, the first call fills the window exactly — no sleep yet.
+    client.search_by_sku("A")
     assert sleeps == [], f"no sleep should fire until window overflows; got {sleeps}"
 
-    # search_by_sku("B") also makes 2 _throttle() calls. The first pushes the
-    # deque to 3 (= limit, no sleep). The second call finds the deque already at
-    # the limit and fires a sleep until the oldest slot ages out of the 5s window.
+    # Second search finds the deque at the limit and must sleep until the
+    # oldest slot ages out of the 5s window.
     client.search_by_sku("B")
     assert len(sleeps) >= 1
     assert sleeps[0] > 0.0
