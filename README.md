@@ -49,10 +49,19 @@ Open http://localhost:8501
 
 3. **Library** — browse/delete infographics across all lines.
 
+4. **Bulk Export** (ad-hoc)
+   - Paste SKUs or upload a CSV (first column = SKU)
+   - Tool queries Bynder for each (tags + `property_SKUs`), dedupes, rate-limits
+   - Downloads a CSV: one row per matched asset with `sku, image_name, image_link, tags, upc, asset_id`
+   - Use the CSV to drive Amazon uploads, spreadsheets, or hand off to a VA
+   - Optional env vars (see `.env.example`): `BYNDER_CSV_DERIVATIVE_KEY` for full-resolution CDN URLs, `BYNDER_CSV_UPC_KEYS` to override UPC metaproperty lookup
+   - Configuring a full-resolution Bynder derivative: see appendix §16 of `docs/superpowers/specs/2026-04-21-bulk-sku-csv-export-design.md`
+
 ## Deployment (Coolify/Vultr)
 
 - Point Coolify at this repo
 - Set env vars: `DATABASE_URL` (Supabase), `BYNDER_PERMANENT_TOKEN`, `STREAMLIT_USERNAME`, `STREAMLIT_PASSWORD`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
+- Optional: `BYNDER_CSV_DERIVATIVE_KEY`, `BYNDER_CSV_UPC_KEYS` (for Bulk Export — see Workflow §4)
 - Mount persistent volume at `/app/infographics`
 - Expose port 8501 behind Coolify's reverse proxy
 
