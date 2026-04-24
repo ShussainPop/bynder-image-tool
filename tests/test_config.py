@@ -65,6 +65,38 @@ def test_config_parses_optional_derivative_and_upc_keys():
     assert cfg.bynder_csv_upc_keys == ["property_UPC", "property_GTIN"]
 
 
+def test_config_accepts_client_credentials_without_permanent_token():
+    env = {
+        "DATABASE_URL": "postgresql://test",
+        "BYNDER_DOMAIN": "popsockets.bynder.com",
+        "BYNDER_CLIENT_ID": "cid",
+        "BYNDER_CLIENT_SECRET": "csec",
+        "STREAMLIT_USERNAME": "admin",
+        "STREAMLIT_PASSWORD": "pw",
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
+        from src.config import load_config
+        cfg = load_config()
+    assert cfg.bynder_permanent_token is None
+    assert cfg.bynder_client_id == "cid"
+    assert cfg.bynder_client_secret == "csec"
+
+
+def test_config_raises_when_no_bynder_credentials():
+    env = {
+        "DATABASE_URL": "postgresql://test",
+        "BYNDER_DOMAIN": "popsockets.bynder.com",
+        "STREAMLIT_USERNAME": "admin",
+        "STREAMLIT_PASSWORD": "pw",
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
+        from src.config import load_config
+        with pytest.raises(RuntimeError, match="Bynder credentials"):
+            load_config()
+
+
 def test_config_defaults_derivative_key_none_and_upc_keys_standard():
     env = {
         "DATABASE_URL": "postgresql://test",

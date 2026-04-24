@@ -9,7 +9,7 @@ _DEFAULT_UPC_KEYS = ["property_UPC", "property_GTIN", "property_Barcode"]
 class Config:
     database_url: str
     bynder_domain: str
-    bynder_permanent_token: str
+    bynder_permanent_token: str | None
     streamlit_username: str
     streamlit_password: str
     bynder_client_id: str | None
@@ -28,7 +28,6 @@ class Config:
 _REQUIRED = (
     "DATABASE_URL",
     "BYNDER_DOMAIN",
-    "BYNDER_PERMANENT_TOKEN",
     "STREAMLIT_USERNAME",
     "STREAMLIT_PASSWORD",
 )
@@ -40,6 +39,20 @@ def load_config() -> Config:
     if missing:
         raise RuntimeError(f"Missing required env vars: {', '.join(missing)}")
 
+    # Bynder auth: either a permanent token, or client_id + client_secret.
+    # make_bynder_client() prefers client credentials (auto-refresh) when both
+    # are set.
+    has_token = bool(os.environ.get("BYNDER_PERMANENT_TOKEN"))
+    has_client_creds = bool(
+        os.environ.get("BYNDER_CLIENT_ID")
+        and os.environ.get("BYNDER_CLIENT_SECRET")
+    )
+    if not (has_token or has_client_creds):
+        raise RuntimeError(
+            "Missing Bynder credentials: set either BYNDER_PERMANENT_TOKEN, "
+            "or both BYNDER_CLIENT_ID and BYNDER_CLIENT_SECRET."
+        )
+
     upc_keys_raw = os.environ.get("BYNDER_CSV_UPC_KEYS", "")
     upc_keys = (
         [k.strip() for k in upc_keys_raw.split(",") if k.strip()]
@@ -50,7 +63,7 @@ def load_config() -> Config:
     return Config(
         database_url=os.environ["DATABASE_URL"],
         bynder_domain=os.environ["BYNDER_DOMAIN"],
-        bynder_permanent_token=os.environ["BYNDER_PERMANENT_TOKEN"],
+        bynder_permanent_token=os.environ.get("BYNDER_PERMANENT_TOKEN") or None,
         streamlit_username=os.environ["STREAMLIT_USERNAME"],
         streamlit_password=os.environ["STREAMLIT_PASSWORD"],
         bynder_client_id=os.environ.get("BYNDER_CLIENT_ID") or None,
