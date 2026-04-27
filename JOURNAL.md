@@ -46,11 +46,22 @@ out of the CSV. CSV-only output forced an extra round-trip to a file picker.
   zip with every image for that SKU.
 - 30+ SKUs → confirm Prev/Next paginator and 25-per-page slicing.
 
+**Follow-up the same day**
+- Per-asset download swapped from `st.link_button` (which navigated to the
+  Bynder CDN URL — and Bynder doesn't send `Content-Disposition: attachment`,
+  so browsers rendered images inline) to a two-step **Prepare → Save**
+  pattern matching the existing per-SKU zip flow. Bytes are fetched on
+  click via `sku_bundle.fetch_asset_bytes` (renamed from the private
+  `_default_fetch`), stashed in `st.session_state`, and served via a real
+  `st.download_button`. New `_clear_cached_bytes()` wipes per-asset and
+  per-SKU-zip bytes from session_state when a fresh export runs.
+
 **Gotchas**
-- Streamlit's `st.download_button` requires bytes upfront, so per-asset is a
-  `link_button` (browser handles the download via CDN headers) and per-SKU
-  is a two-step "Build → Download" pattern. Building all zips eagerly would
-  trigger N HTTP fetches per render, so they're built only on click.
+- Streamlit's `st.download_button` requires bytes at render time, not on
+  click — that's why everything downloadable is a two-step pattern.
+  Pre-fetching every visible asset on render would mean ~25 SKUs × ~5
+  assets × 1–5 MB each = potentially hundreds of MB on every paginator
+  click. Two-step + session_state is the right cost/UX trade.
 - Switched to a `st.session_state["bulk_export_state"]` stash so paginator
   clicks and "Build .zip" reruns don't lose the export result. Previously
   the tab's whole state was gated on the **Generate CSV** button being

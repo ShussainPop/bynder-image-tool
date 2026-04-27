@@ -14,8 +14,12 @@ from src.core.bulk_export import (
 )
 from src.core.bynder_asset_cache import BynderAssetCache
 from src.core.bynder_urls import resolve_csv_url
-from src.core.sku_bundle import build_sku_zip
+from src.core.sku_bundle import build_sku_zip, fetch_asset_bytes
 from src.ui.deps import make_bynder_client, session_scope
+
+
+_ASSET_BYTES_PREFIX = "bulk_asset_bytes_"
+_SKU_ZIP_PREFIX = "bulk_zip_"
 
 
 INLINE_PAGE_SIZE = 25
@@ -136,6 +140,7 @@ def _run_and_store(cfg, pasted: str, uploaded, include_missing: bool, force_refr
             force_refresh=force_refresh,
         )
 
+    _clear_cached_bytes()
     st.session_state["bulk_export_state"] = {
         "result": result,
         "total": len(skus),
@@ -144,6 +149,15 @@ def _run_and_store(cfg, pasted: str, uploaded, include_missing: bool, force_refr
         "include_missing": include_missing,
     }
     st.session_state["bulk_export_page"] = 0
+
+
+def _clear_cached_bytes() -> None:
+    """Drop per-asset and per-SKU-zip bytes from prior exports."""
+    for k in [
+        k for k in list(st.session_state.keys())
+        if k.startswith(_ASSET_BYTES_PREFIX) or k.startswith(_SKU_ZIP_PREFIX)
+    ]:
+        st.session_state.pop(k, None)
 
 
 def _collect_skus(pasted: str, uploaded) -> list[str]:
@@ -225,9 +239,9 @@ def _render_sku_block(sku: str, assets, derivative_key: str | None) -> None:
                 st.caption(asset.filename)
                 full_url = resolve_csv_url(asset.raw, derivative_key)
                 if full_url:
-                    st.link_button("Download ↗", url=full_url, use_container_width=True)
+                    _render_asset_download(sku, asset, full_url)
 
-        bundle_key = f"bulk_zip_{sku}"
+        bundle_key = f"{_SKU_ZIP_PREFIX}{sku}"
         if st.button(
             f"📦 Build .zip for all {len(assets)} images",
             key=f"bulk_zip_build_{sku}",
@@ -248,3 +262,43 @@ def _render_sku_block(sku: str, assets, derivative_key: str | None) -> None:
                 mime="application/zip",
                 key=f"bulk_zip_dl_{sku}",
             )
+
+
+_MIME_BY_EXT = {
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "tif": "image/tiff",
+    "tiff": "image/tiff",
+}
+
+
+def _render_asset_download(sku: str, asset, full_url: str) -> None:
+    """Two-step per-asset download: Prepare fetches bytes; Save triggers the browser save dialog."""
+    bytes_key = f"{_ASSET_BYTES_PREFIX}{sku}_{asset.asset_id}"
+
+    if bytes_key in st.session_state:
+        st.download_button(
+            label=f"⬇ Save {asset.filename}",
+            data=st.session_state[bytes_key],
+            file_name=asset.filename,
+            mime=_MIME_BY_EXT.get((asset.extension or "").lower(), "application/octet-stream"),
+            key=f"bulk_asset_dl_{sku}_{asset.asset_id}",
+            use_container_width=True,
+        )
+        return
+
+    if st.button(
+        "⬇ Prepare download",
+        key=f"bulk_asset_prep_{sku}_{asset.asset_id}",
+        use_container_width=True,
+    ):
+        with st.spinner("Fetching…"):
+            try:
+                st.session_state[bytes_key] = fetch_asset_bytes(full_url)
+            except Exception as e:
+                st.error(f"Fetch failed: {e}")
+                return
+        st.rerun()

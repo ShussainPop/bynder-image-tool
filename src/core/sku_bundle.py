@@ -17,7 +17,8 @@ from src.core.bynder_urls import resolve_csv_url
 _FetchFn = Callable[[str], bytes]
 
 
-def _default_fetch(url: str) -> bytes:
+def fetch_asset_bytes(url: str) -> bytes:
+    """Default HTTP GET used by build_sku_zip and the UI's per-asset Prepare flow."""
     resp = requests.get(url, timeout=30)
     resp.raise_for_status()
     return resp.content
@@ -35,7 +36,7 @@ def build_sku_zip(
     Assets whose URL cannot be resolved are skipped silently.
     Returns empty zip bytes if no assets are downloadable.
     """
-    fetcher = fetch or _default_fetch
+    fetcher = fetch or fetch_asset_bytes
     used: set[str] = set()
     buf = io.BytesIO()
 
