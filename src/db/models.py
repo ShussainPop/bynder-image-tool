@@ -122,3 +122,15 @@ class PackageHistory(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class BynderAssetCacheEntry(Base):
+    __tablename__ = "contentup_image_bynder_asset_cache"
+
+    sku: Mapped[str] = mapped_column(Text, primary_key=True)
+    assets_json: Mapped[list] = mapped_column(JSON, nullable=False)
+    cached_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.current_timestamp(),
+        nullable=False,
+    )

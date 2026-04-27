@@ -97,6 +97,53 @@ def test_config_raises_when_no_bynder_credentials():
             load_config()
 
 
+def test_config_default_cache_ttl_is_seven_days():
+    env = {
+        "DATABASE_URL": "postgresql://test",
+        "BYNDER_DOMAIN": "popsockets.bynder.com",
+        "BYNDER_PERMANENT_TOKEN": "tok",
+        "STREAMLIT_USERNAME": "admin",
+        "STREAMLIT_PASSWORD": "pw",
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
+        from src.config import load_config
+        cfg = load_config()
+    assert cfg.bynder_cache_ttl_days == 7
+
+
+def test_config_parses_custom_cache_ttl():
+    env = {
+        "DATABASE_URL": "postgresql://test",
+        "BYNDER_DOMAIN": "popsockets.bynder.com",
+        "BYNDER_PERMANENT_TOKEN": "tok",
+        "STREAMLIT_USERNAME": "admin",
+        "STREAMLIT_PASSWORD": "pw",
+        "BYNDER_CACHE_TTL_DAYS": "30",
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
+        from src.config import load_config
+        cfg = load_config()
+    assert cfg.bynder_cache_ttl_days == 30
+
+
+def test_config_rejects_non_integer_cache_ttl():
+    env = {
+        "DATABASE_URL": "postgresql://test",
+        "BYNDER_DOMAIN": "popsockets.bynder.com",
+        "BYNDER_PERMANENT_TOKEN": "tok",
+        "STREAMLIT_USERNAME": "admin",
+        "STREAMLIT_PASSWORD": "pw",
+        "BYNDER_CACHE_TTL_DAYS": "soon",
+    }
+    with patch.dict(os.environ, env, clear=True), \
+         patch("src.config.load_dotenv", lambda: None):
+        from src.config import load_config
+        with pytest.raises(RuntimeError, match="BYNDER_CACHE_TTL_DAYS"):
+            load_config()
+
+
 def test_config_defaults_derivative_key_none_and_upc_keys_standard():
     env = {
         "DATABASE_URL": "postgresql://test",

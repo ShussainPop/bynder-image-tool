@@ -23,6 +23,7 @@ class Config:
     bynder_csv_upc_keys: list[str] = field(
         default_factory=lambda: list(_DEFAULT_UPC_KEYS)
     )
+    bynder_cache_ttl_days: int = 7
 
 
 _REQUIRED = (
@@ -60,6 +61,19 @@ def load_config() -> Config:
         else list(_DEFAULT_UPC_KEYS)
     )
 
+    ttl_raw = os.environ.get("BYNDER_CACHE_TTL_DAYS", "").strip()
+    if ttl_raw:
+        try:
+            ttl_days = int(ttl_raw)
+        except ValueError as e:
+            raise RuntimeError(
+                f"BYNDER_CACHE_TTL_DAYS must be an integer, got {ttl_raw!r}"
+            ) from e
+        if ttl_days < 0:
+            raise RuntimeError("BYNDER_CACHE_TTL_DAYS must be >= 0")
+    else:
+        ttl_days = 7
+
     return Config(
         database_url=os.environ["DATABASE_URL"],
         bynder_domain=os.environ["BYNDER_DOMAIN"],
@@ -77,4 +91,5 @@ def load_config() -> Config:
         infographics_dir=os.environ.get("INFOGRAPHICS_DIR", "./infographics"),
         bynder_csv_derivative_key=os.environ.get("BYNDER_CSV_DERIVATIVE_KEY") or None,
         bynder_csv_upc_keys=upc_keys,
+        bynder_cache_ttl_days=ttl_days,
     )

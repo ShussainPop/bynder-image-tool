@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.core.bynder_asset_cache import BynderAssetCache
 from src.core.bynder_client import BynderClient, BynderAsset
 from src.core.mapping_engine import (
     AMAZON_SLOTS,
@@ -39,8 +40,15 @@ def build_package_context(
     tier: str,
     bynder_client: BynderClient,
     infographic_lib: InfographicLibrary,
+    cache: BynderAssetCache | None = None,
+    force_refresh: bool = False,
 ) -> PackageContext:
-    assets = bynder_client.search_by_sku(sku)
+    if cache is not None:
+        assets, _ = cache.get_or_fetch(
+            sku, bynder_client.search_by_sku, force_refresh=force_refresh
+        )
+    else:
+        assets = bynder_client.search_by_sku(sku)
     asset_map = {a.asset_id: a for a in assets}
 
     pattern_row = (

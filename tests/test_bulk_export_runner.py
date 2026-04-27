@@ -110,3 +110,66 @@ def test_run_export_reports_progress():
         on_progress=lambda done, total: seen.append((done, total)),
     )
     assert seen == [(1, 3), (2, 3), (3, 3)]
+
+
+class FakeCache:
+    """Simple in-memory cache implementing the _AssetCache protocol."""
+    def __init__(self, prefilled=None):
+        self._store = dict(prefilled or {})
+        self.calls: list[tuple[str, bool]] = []
+
+    def get_or_fetch(self, sku, fetch_fn, force_refresh=False):
+        self.calls.append((sku, force_refresh))
+        if not force_refresh and sku in self._store:
+            return self._store[sku], True
+        fresh = fetch_fn(sku)
+        self._store[sku] = fresh
+        return fresh, False
+
+
+def test_run_export_uses_cache_and_reports_hits():
+    cached_assets = [_asset("a1", "A"), _asset("a2", "A")]
+    cache = FakeCache(prefilled={"A": cached_assets})
+    client = FakeClient(result_map={"B": [_asset("b1", "B")]})
+
+    result = run_export(
+        skus=["A", "B"],
+        client=client,
+        derivative_key=None,
+        upc_keys=[],
+        cache=cache,
+    )
+
+    # A served from cache → no Bynder call. B was a miss → one call.
+    assert client.calls == ["B"]
+    assert result.cache_hits == 1
+    assert len(result.rows) == 3
+
+
+def test_run_export_force_refresh_bypasses_cache():
+    cache = FakeCache(prefilled={"A": [_asset("stale", "A")]})
+    client = FakeClient(result_map={"A": [_asset("fresh", "A")]})
+
+    result = run_export(
+        skus=["A"],
+        client=client,
+        derivative_key=None,
+        upc_keys=[],
+        cache=cache,
+        force_refresh=True,
+    )
+
+    assert client.calls == ["A"]
+    assert result.cache_hits == 0
+    assert result.rows[0].asset_id == "fresh"
+
+
+def test_run_export_without_cache_keeps_zero_hits():
+    client = FakeClient(result_map={"A": [_asset("a1", "A")]})
+    result = run_export(
+        skus=["A"],
+        client=client,
+        derivative_key=None,
+        upc_keys=[],
+    )
+    assert result.cache_hits == 0

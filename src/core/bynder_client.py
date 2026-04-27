@@ -104,7 +104,7 @@ class BynderClient:
             if _matches_sku(r, sku, self.SKU_PROPERTY_KEY):
                 merged[r.get("id", "")] = r
 
-        assets = [_to_asset(r, self.SKU_PROPERTY_KEY, sku) for r in merged.values()]
+        assets = [to_asset(r, self.SKU_PROPERTY_KEY, sku) for r in merged.values()]
         return [a for a in assets if a.extension in self.AMAZON_SAFE_EXTENSIONS]
 
     def download_asset(self, asset: BynderAsset, dest: Path) -> None:
@@ -153,7 +153,7 @@ def _matches_sku(raw: dict, sku: str, sku_key: str) -> bool:
     return False
 
 
-def _to_asset(raw: dict, sku_key: str, searched_sku: str | None = None) -> BynderAsset:
+def to_asset(raw: dict, sku_key: str, searched_sku: str | None = None) -> BynderAsset:
     ext_list = raw.get("extension") or []
     ext = (ext_list[0] if ext_list else "").lower()
     name = raw.get("name") or ""

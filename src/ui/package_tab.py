@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 import tempfile
 
@@ -5,6 +6,7 @@ import streamlit as st
 
 from src.config import load_config
 from src.core.amazon_packager import SlotFile, build_zip, validate_image
+from src.core.bynder_asset_cache import BynderAssetCache
 from src.core.bynder_client import BynderClient
 from src.core.infographic_library import InfographicLibrary
 from src.core.mapping_engine import AMAZON_SLOTS
@@ -64,13 +66,28 @@ def render() -> None:
             st.error(f"No wizard config for '{product_line_name}'. Configure it in the Mapping Wizard first.")
             return
 
-        if st.button("Fetch Bynder assets", key="pkg_fetch"):
+        fetch_cols = st.columns([1, 1, 4])
+        do_fetch = fetch_cols[0].button("Fetch Bynder assets", key="pkg_fetch")
+        do_refresh = fetch_cols[1].button(
+            "Refresh from Bynder",
+            key="pkg_refresh",
+            help=(
+                f"Bypass the {cfg.bynder_cache_ttl_days}-day cache and re-query "
+                "Bynder for this SKU."
+            ),
+        )
+
+        if do_fetch or do_refresh:
             try:
                 bynder = make_bynder_client(cfg)
             except Exception as e:
                 st.error(f"Bynder auth failed: {e}")
                 return
 
+            cache = BynderAssetCache(
+                session=session,
+                ttl=timedelta(days=cfg.bynder_cache_ttl_days),
+            )
             try:
                 with st.spinner("Querying Bynder..."):
                     ctx = build_package_context(
@@ -80,6 +97,8 @@ def render() -> None:
                         tier=tier,
                         bynder_client=bynder,
                         infographic_lib=infographic_lib,
+                        cache=cache,
+                        force_refresh=do_refresh,
                     )
             except Exception as e:
                 st.error(f"Bynder fetch failed: {e}")

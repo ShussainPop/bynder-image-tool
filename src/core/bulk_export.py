@@ -100,11 +100,21 @@ class _SearchClient(Protocol):
     def search_by_sku(self, sku: str) -> list[BynderAsset]: ...
 
 
+class _AssetCache(Protocol):
+    def get_or_fetch(
+        self,
+        sku: str,
+        fetch_fn: Callable[[str], list[BynderAsset]],
+        force_refresh: bool = False,
+    ) -> tuple[list[BynderAsset], bool]: ...
+
+
 @dataclass
 class BulkExportResult:
     rows: list[BulkExportRow]
     missing_skus: list[str]
     failed_skus: list[tuple[str, str]]
+    cache_hits: int = 0
 
 
 def run_export(
@@ -114,15 +124,25 @@ def run_export(
     upc_keys: list[str],
     include_missing: bool = False,
     on_progress: Callable[[int, int], None] | None = None,
+    cache: _AssetCache | None = None,
+    force_refresh: bool = False,
 ) -> BulkExportResult:
     rows: list[BulkExportRow] = []
     missing: list[str] = []
     failed: list[tuple[str, str]] = []
+    cache_hits = 0
     total = len(skus)
 
     for i, sku in enumerate(skus, start=1):
         try:
-            assets = client.search_by_sku(sku)
+            if cache is not None:
+                assets, was_hit = cache.get_or_fetch(
+                    sku, client.search_by_sku, force_refresh=force_refresh
+                )
+                if was_hit:
+                    cache_hits += 1
+            else:
+                assets = client.search_by_sku(sku)
         except Exception as e:
             failed.append((sku, str(e)))
             if on_progress is not None:
@@ -143,7 +163,12 @@ def run_export(
         if on_progress is not None:
             on_progress(i, total)
 
-    return BulkExportResult(rows=rows, missing_skus=missing, failed_skus=failed)
+    return BulkExportResult(
+        rows=rows,
+        missing_skus=missing,
+        failed_skus=failed,
+        cache_hits=cache_hits,
+    )
 
 
 CSV_COLUMNS = ["sku", "image_name", "image_link", "tags", "upc", "asset_id"]

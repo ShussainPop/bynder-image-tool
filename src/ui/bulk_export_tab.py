@@ -1,4 +1,5 @@
 import datetime as _dt
+from datetime import timedelta
 
 import streamlit as st
 
@@ -10,7 +11,8 @@ from src.core.bulk_export import (
     run_export,
     to_csv_bytes,
 )
-from src.ui.deps import make_bynder_client
+from src.core.bynder_asset_cache import BynderAssetCache
+from src.ui.deps import make_bynder_client, session_scope
 
 
 def render() -> None:
@@ -39,6 +41,14 @@ def render() -> None:
         "Include missing-SKU rows (emit a blank-image row per SKU with no Bynder hits)",
         key="bulk_include_missing",
     )
+    force_refresh = st.checkbox(
+        "Force refresh from Bynder (ignore cache)",
+        key="bulk_force_refresh",
+        help=(
+            f"Bynder responses are cached for {cfg.bynder_cache_ttl_days} days "
+            "to skip re-querying SKUs we already have. Tick this to bypass."
+        ),
+    )
 
     if not st.button("Generate CSV", key="bulk_generate", type="primary"):
         return
@@ -64,14 +74,21 @@ def render() -> None:
     def _on_progress(done: int, total: int) -> None:
         progress.progress(done / total, text=f"{done} / {total} SKUs")
 
-    result = run_export(
-        skus=skus,
-        client=client,
-        derivative_key=cfg.bynder_csv_derivative_key,
-        upc_keys=cfg.bynder_csv_upc_keys,
-        include_missing=include_missing,
-        on_progress=_on_progress,
-    )
+    with session_scope() as session:
+        cache = BynderAssetCache(
+            session=session,
+            ttl=timedelta(days=cfg.bynder_cache_ttl_days),
+        )
+        result = run_export(
+            skus=skus,
+            client=client,
+            derivative_key=cfg.bynder_csv_derivative_key,
+            upc_keys=cfg.bynder_csv_upc_keys,
+            include_missing=include_missing,
+            on_progress=_on_progress,
+            cache=cache,
+            force_refresh=force_refresh,
+        )
 
     _render_summary(result, len(skus))
 
@@ -102,13 +119,15 @@ def _collect_skus(pasted: str, uploaded) -> list[str]:
 
 
 def _render_summary(result, total: int) -> None:
-    num_cols = 4 if result.failed_skus else 3
+    fresh = total - result.cache_hits - len(result.failed_skus)
+    num_cols = 5 if result.failed_skus else 4
     cols = st.columns(num_cols)
     cols[0].metric("SKUs processed", total)
     cols[1].metric("Rows", len(result.rows))
-    cols[2].metric("Missing", len(result.missing_skus))
+    cols[2].metric("Cached", result.cache_hits, help="Returned from local cache; no Bynder call.")
+    cols[3].metric("Missing", len(result.missing_skus))
     if result.failed_skus:
-        cols[3].metric("Errors", len(result.failed_skus))
+        cols[4].metric("Errors", len(result.failed_skus))
 
     if result.missing_skus:
         with st.expander(f"{len(result.missing_skus)} SKUs with no Bynder matches"):
