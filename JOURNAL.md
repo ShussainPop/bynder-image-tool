@@ -11,6 +11,56 @@ Format: newest first. Maintenance rules in `CLAUDE.md` § *Journal maintenance*.
 
 ## Unreleased
 
+### 2026-04-27 — Bulk Export: Browse-by-SKU view with per-asset & per-SKU zip downloads
+
+**What shipped**
+- Bulk Export tab now renders a "Browse by SKU" section under the existing
+  CSV download. Images grouped per SKU in expanders, 4-column thumbnail grid
+  using `BynderAsset.thumbnail_url` (CDN — no Bynder API hit, throttle-safe).
+- Per-asset **Download ↗** link button pointing at the resolved full-res CDN
+  URL (same URL the CSV emits).
+- Per-SKU two-step **Build .zip → Download `<sku>.zip`** flow. Zip is built
+  in-memory by fetching each asset's full-res URL via `requests`, written
+  with arcnames `<sku>__<filename>` (collisions disambiguated as `(2)`).
+- Pagination at 25 SKUs/page (`INLINE_PAGE_SIZE`) so 2000-SKU runs don't
+  blow up the DOM.
+- New `src/core/sku_bundle.py::build_sku_zip()` — framework-agnostic helper
+  with an injectable `fetch` callable for testing.
+- New `BulkExportResult.assets_by_sku: dict[str, list[BynderAsset]]` —
+  parallel to `rows`, keyed on SKU. CSV contract (`BulkExportRow`,
+  `to_csv_bytes`, `CSV_COLUMNS`) is unchanged.
+- 6 new tests in `tests/test_sku_bundle.py` + 1 new assertion in
+  `tests/test_bulk_export_runner.py`. Full suite: 99 passed.
+
+**Why**
+User wanted bulk export to double as a quick image browser — find a SKU,
+eyeball its assets, grab one image (or all of them) without copy-pasting URLs
+out of the CSV. CSV-only output forced an extra round-trip to a file picker.
+
+**How to verify**
+- `pytest tests/ -q` → 99 passed.
+- Live (http://rdzhmu8lzvc7aqhc16v6gaec.137.220.62.47.sslip.io): Bulk
+  Export → paste a few SKUs known to have Bynder hits → Generate. Confirm
+  thumbnails render in expanders, **Download ↗** opens/downloads the
+  full-res file, **Build .zip** then **Download `<sku>.zip`** produces a
+  zip with every image for that SKU.
+- 30+ SKUs → confirm Prev/Next paginator and 25-per-page slicing.
+
+**Gotchas**
+- Streamlit's `st.download_button` requires bytes upfront, so per-asset is a
+  `link_button` (browser handles the download via CDN headers) and per-SKU
+  is a two-step "Build → Download" pattern. Building all zips eagerly would
+  trigger N HTTP fetches per render, so they're built only on click.
+- Switched to a `st.session_state["bulk_export_state"]` stash so paginator
+  clicks and "Build .zip" reruns don't lose the export result. Previously
+  the tab's whole state was gated on the **Generate CSV** button being
+  True on the current run, which meant any subsequent button click wiped
+  the view.
+- `BynderAsset` is a frozen dataclass with no SQLAlchemy linkage, so
+  reading `result.assets_by_sku` after `session_scope()` exits is safe.
+
+---
+
 _(Promote items from here into a dated section at end-of-session or release time.)_
 
 ---

@@ -9,7 +9,7 @@ import csv
 import datetime as _dt
 import io
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
 from src.core.bynder_client import BynderAsset
@@ -115,6 +115,7 @@ class BulkExportResult:
     missing_skus: list[str]
     failed_skus: list[tuple[str, str]]
     cache_hits: int = 0
+    assets_by_sku: dict[str, list[BynderAsset]] = field(default_factory=dict)
 
 
 def run_export(
@@ -130,6 +131,7 @@ def run_export(
     rows: list[BulkExportRow] = []
     missing: list[str] = []
     failed: list[tuple[str, str]] = []
+    assets_by_sku: dict[str, list[BynderAsset]] = {}
     cache_hits = 0
     total = len(skus)
 
@@ -157,6 +159,7 @@ def run_export(
                     tags="", upc="", asset_id="",
                 ))
         else:
+            assets_by_sku[sku] = list(assets)
             for a in assets:
                 rows.append(build_row(sku, a, derivative_key, upc_keys))
 
@@ -168,6 +171,7 @@ def run_export(
         missing_skus=missing,
         failed_skus=failed,
         cache_hits=cache_hits,
+        assets_by_sku=assets_by_sku,
     )
 
 

@@ -48,6 +48,25 @@ def test_run_export_collects_rows_per_sku():
     assert [r.sku for r in result.rows] == ["A", "A", "B"]
     assert result.missing_skus == []
     assert result.failed_skus == []
+    assert set(result.assets_by_sku.keys()) == {"A", "B"}
+    assert [a.asset_id for a in result.assets_by_sku["A"]] == ["a1", "a2"]
+    assert [a.asset_id for a in result.assets_by_sku["B"]] == ["b1"]
+
+
+def test_run_export_assets_by_sku_excludes_missing_and_failed():
+    client = FakeClient(
+        result_map={"A": [_asset("a1", "A")]},
+        errors={"B": RuntimeError("boom")},
+    )
+    result = run_export(
+        skus=["A", "B", "C"],
+        client=client,
+        derivative_key=None,
+        upc_keys=[],
+        include_missing=True,
+    )
+    # Only matched SKU is keyed in assets_by_sku — missing/failed are tracked separately.
+    assert list(result.assets_by_sku.keys()) == ["A"]
 
 
 def test_run_export_records_missing_skus_without_emitting_rows_by_default():

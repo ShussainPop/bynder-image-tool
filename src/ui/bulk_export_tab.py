@@ -5,6 +5,7 @@ import streamlit as st
 
 from src.config import load_config
 from src.core.bulk_export import (
+    BulkExportResult,
     export_filename,
     parse_sku_csv,
     parse_sku_input,
@@ -12,7 +13,13 @@ from src.core.bulk_export import (
     to_csv_bytes,
 )
 from src.core.bynder_asset_cache import BynderAssetCache
+from src.core.bynder_urls import resolve_csv_url
+from src.core.sku_bundle import build_sku_zip
 from src.ui.deps import make_bynder_client, session_scope
+
+
+INLINE_PAGE_SIZE = 25
+GRID_COLUMNS = 4
 
 
 def render() -> None:
@@ -50,22 +57,61 @@ def render() -> None:
         ),
     )
 
-    if not st.button("Generate CSV", key="bulk_generate", type="primary"):
+    if st.button("Generate CSV", key="bulk_generate", type="primary"):
+        _run_and_store(cfg, pasted, uploaded, include_missing, force_refresh)
+
+    state = st.session_state.get("bulk_export_state")
+    if state is None:
         return
 
+    result: BulkExportResult = state["result"]
+    total: int = state["total"]
+    derivative_key: str | None = state["derivative_key"]
+    generated_at: _dt.datetime = state["generated_at"]
+    include_missing_used: bool = state["include_missing"]
+
+    _render_summary(result, total)
+
+    if result.failed_skus and not result.rows and not (
+        include_missing_used and result.missing_skus
+    ):
+        preview = "\n".join(f"- `{sku}`: {err}" for sku, err in result.failed_skus[:3])
+        st.error(f"Bynder returned errors for every SKU:\n\n{preview}")
+        return
+
+    if not result.rows and not (include_missing_used and result.missing_skus):
+        st.error("No rows to export. Check the SKU list or Bynder connection.")
+        return
+
+    st.download_button(
+        label="Download CSV",
+        data=to_csv_bytes(result),
+        file_name=export_filename(generated_at),
+        mime="text/csv",
+        key="bulk_download",
+    )
+
+    _render_grouped_view(result, derivative_key)
+
+
+def _run_and_store(cfg, pasted: str, uploaded, include_missing: bool, force_refresh: bool) -> None:
+    """Validate inputs, run the export, and stash the result in session_state."""
     try:
         skus = _collect_skus(pasted, uploaded)
     except ValueError as e:
+        st.session_state.pop("bulk_export_state", None)
         st.error(str(e))
         return
 
     if not skus:
+        st.session_state.pop("bulk_export_state", None)
         st.error("Paste at least one SKU or upload a CSV.")
         return
 
     try:
         client = make_bynder_client(cfg)
     except Exception as e:
+        st.session_state.pop("bulk_export_state", None)
         st.error(f"Bynder auth failed: {e}")
         return
 
@@ -90,24 +136,14 @@ def render() -> None:
             force_refresh=force_refresh,
         )
 
-    _render_summary(result, len(skus))
-
-    if result.failed_skus and not result.rows and not (include_missing and result.missing_skus):
-        preview = "\n".join(f"- `{sku}`: {err}" for sku, err in result.failed_skus[:3])
-        st.error(f"Bynder returned errors for every SKU:\n\n{preview}")
-        return
-
-    if not result.rows and not (include_missing and result.missing_skus):
-        st.error("No rows to export. Check the SKU list or Bynder connection.")
-        return
-
-    st.download_button(
-        label="Download CSV",
-        data=to_csv_bytes(result),
-        file_name=export_filename(_dt.datetime.now()),
-        mime="text/csv",
-        key="bulk_download",
-    )
+    st.session_state["bulk_export_state"] = {
+        "result": result,
+        "total": len(skus),
+        "derivative_key": cfg.bynder_csv_derivative_key,
+        "generated_at": _dt.datetime.now(),
+        "include_missing": include_missing,
+    }
+    st.session_state["bulk_export_page"] = 0
 
 
 def _collect_skus(pasted: str, uploaded) -> list[str]:
@@ -137,3 +173,78 @@ def _render_summary(result, total: int) -> None:
         with st.expander(f"{len(result.failed_skus)} SKUs errored during fetch"):
             for sku, err in result.failed_skus:
                 st.write(f"- `{sku}`: {err}")
+
+
+def _render_grouped_view(result: BulkExportResult, derivative_key: str | None) -> None:
+    skus = list(result.assets_by_sku.keys())
+    if not skus:
+        return
+
+    st.divider()
+    st.subheader(f"Browse by SKU — {len(skus)} matched")
+
+    page = st.session_state.get("bulk_export_page", 0)
+    total_pages = (len(skus) + INLINE_PAGE_SIZE - 1) // INLINE_PAGE_SIZE
+    if page >= total_pages:
+        page = 0
+        st.session_state["bulk_export_page"] = 0
+
+    if total_pages > 1:
+        nav_prev, nav_label, nav_next = st.columns([1, 2, 1])
+        with nav_prev:
+            if st.button("← Prev", key="bulk_prev", disabled=page == 0):
+                st.session_state["bulk_export_page"] = max(0, page - 1)
+                st.rerun()
+        with nav_label:
+            start = page * INLINE_PAGE_SIZE + 1
+            end = min(len(skus), (page + 1) * INLINE_PAGE_SIZE)
+            st.markdown(
+                f"<div style='text-align:center;padding-top:6px;'>"
+                f"Page {page + 1} of {total_pages} · SKUs {start}–{end}</div>",
+                unsafe_allow_html=True,
+            )
+        with nav_next:
+            if st.button("Next →", key="bulk_next", disabled=page >= total_pages - 1):
+                st.session_state["bulk_export_page"] = min(total_pages - 1, page + 1)
+                st.rerun()
+
+    page_skus = skus[page * INLINE_PAGE_SIZE : (page + 1) * INLINE_PAGE_SIZE]
+    for sku in page_skus:
+        _render_sku_block(sku, result.assets_by_sku[sku], derivative_key)
+
+
+def _render_sku_block(sku: str, assets, derivative_key: str | None) -> None:
+    with st.expander(f"{sku} — {len(assets)} image{'s' if len(assets) != 1 else ''}", expanded=True):
+        cols = st.columns(GRID_COLUMNS)
+        for i, asset in enumerate(assets):
+            col = cols[i % GRID_COLUMNS]
+            with col:
+                thumb = asset.thumbnail_url or resolve_csv_url(asset.raw, derivative_key)
+                if thumb:
+                    st.image(thumb, width=180)
+                st.caption(asset.filename)
+                full_url = resolve_csv_url(asset.raw, derivative_key)
+                if full_url:
+                    st.link_button("Download ↗", url=full_url, use_container_width=True)
+
+        bundle_key = f"bulk_zip_{sku}"
+        if st.button(
+            f"📦 Build .zip for all {len(assets)} images",
+            key=f"bulk_zip_build_{sku}",
+        ):
+            with st.spinner(f"Fetching {len(assets)} images for {sku}…"):
+                try:
+                    st.session_state[bundle_key] = build_sku_zip(sku, assets, derivative_key)
+                except Exception as e:
+                    st.error(f"Failed to build zip: {e}")
+                    st.session_state.pop(bundle_key, None)
+
+        zip_bytes = st.session_state.get(bundle_key)
+        if zip_bytes:
+            st.download_button(
+                label=f"⬇ Download {sku}.zip",
+                data=zip_bytes,
+                file_name=f"{sku}.zip",
+                mime="application/zip",
+                key=f"bulk_zip_dl_{sku}",
+            )
