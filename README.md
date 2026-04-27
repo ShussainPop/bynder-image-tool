@@ -44,6 +44,23 @@ Ask a teammate for the file if you need local Excel-only development.
 - `src/db/` — SQLAlchemy models + Alembic migrations. Tables use `contentup_image_` prefix.
 - `src/ui/` — Streamlit tabs. Discarded when we port to content_manager's React frontend.
 
+### Bynder asset cache
+
+Every SKU lookup is cached in `contentup_image_bynder_asset_cache` (one row
+per SKU, JSON column with the raw Bynder asset list, plus `cached_at`). On a
+hit within the TTL window the cached asset list is returned without touching
+Bynder. Default TTL is 7 days; override with `BYNDER_CACHE_TTL_DAYS`. Empty
+results are cached too — SKUs Bynder has nothing for don't get re-queried
+until expiry.
+
+- **Bulk Export** — summary shows `Cached` alongside `Rows / Missing / Errors`.
+  "Force refresh from Bynder" checkbox bypasses the cache.
+- **Package SKU** — "Refresh from Bynder" button next to *Fetch Bynder assets*
+  bypasses the cache for that SKU.
+
+This eliminates the per-SKU rate-limit pressure on the 4500/5min tenant cap
+when re-running large bulk exports.
+
 ## Workflow
 
 1. **Mapping Wizard** (per product line, once)
@@ -69,11 +86,17 @@ Ask a teammate for the file if you need local Excel-only development.
 
 ## Deployment (Coolify/Vultr)
 
-- Point Coolify at this repo
-- Set env vars: `DATABASE_URL` (Supabase), `BYNDER_PERMANENT_TOKEN`, `STREAMLIT_USERNAME`, `STREAMLIT_PASSWORD`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
-- Optional: `BYNDER_CSV_DERIVATIVE_KEY`, `BYNDER_CSV_UPC_KEYS` (for Bulk Export — see Workflow §4)
-- Mount persistent volume at `/app/infographics`
-- Expose port 8501 behind Coolify's reverse proxy
+- Point Coolify at this repo (live at
+  http://rdzhmu8lzvc7aqhc16v6gaec.137.220.62.47.sslip.io)
+- Set env vars: `DATABASE_URL`, `BYNDER_DOMAIN`, `STREAMLIT_USERNAME`,
+  `STREAMLIT_PASSWORD`, plus **either** `BYNDER_PERMANENT_TOKEN` **or** both
+  `BYNDER_CLIENT_ID` + `BYNDER_CLIENT_SECRET` (preferred — auto-refreshing).
+  Optional: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (catalog lookup),
+  `BYNDER_CSV_DERIVATIVE_KEY`, `BYNDER_CSV_UPC_KEYS` (Bulk Export — see
+  Workflow §4), `BYNDER_CACHE_TTL_DAYS` (default 7).
+- Mount persistent volumes at `/app/db` (SQLite + asset cache),
+  `/app/infographics` (uploads), and `/app/overrides` (per-SKU overrides).
+- Expose port 8501 behind Coolify's reverse proxy.
 
 ## Design docs and plans
 
